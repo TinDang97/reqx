@@ -1,215 +1,277 @@
-import orjson
+"""
+Utility functions for enhanced-httpx.
+"""
+
+import json
 import logging
+import shlex
+import orjson
 import time
-from typing import Any, Dict, List, Optional, Union, Callable
-from jsonpath_ng import parse as jsonpath_parse
-from jsonpath_ng.exceptions import JsonPathParserError
-from datetime import datetime
+import re
+from typing import Any, Dict, Optional, Union, List, Tuple
+from urllib.parse import urlencode
+import jsonpath_ng
+import httpx
 
 logger = logging.getLogger("enhanced_httpx")
 
 
-def serialize_json(data, default=None):
-    """Serialize data to JSON using orjson for maximum performance."""
-    return orjson.dumps(
-        data,
-        default=default,
-        option=orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_SERIALIZE_DATACLASS | orjson.OPT_UTC_Z,
-    ).decode("utf-8")
-
-
-def deserialize_json(data):
-    """Deserialize JSON data using orjson for maximum performance."""
-    if not data:
-        return None
-    return orjson.loads(data)
-
-
-def log_request(url, method, headers=None, body=None, params=None):
+def serialize_json(obj: Any) -> str:
     """
-    Log HTTP request details with proper sanitization of sensitive information.
-
-    Args:
-        url: Request URL
-        method: HTTP method
-        headers: Request headers
-        body: Request body
-        params: Request query parameters
+    Serialize an object to a JSON string using orjson for better performance.
     """
-    sanitized_headers = sanitize_sensitive_data(headers) if headers else {}
-    sanitized_body = sanitize_sensitive_data(body) if body else None
-
-    logger.debug(f"Request: {method} {url}")
-    if params:
-        logger.debug(f"Params: {sanitize_sensitive_data(params)}")
-    if sanitized_headers:
-        logger.debug(f"Headers: {sanitized_headers}")
-    if sanitized_body:
-        logger.debug(f"Body: {sanitized_body}")
+    return orjson.dumps(obj).decode("utf-8")
 
 
-def log_response(response):
+def deserialize_json(json_str: str) -> Any:
     """
-    Log HTTP response details.
-
-    Args:
-        response: HTTP response object
+    Deserialize a JSON string to an object using orjson for better performance.
     """
-    logger.debug(f"Response: {response.status_code} {response.reason_phrase} from {response.url}")
-    logger.debug(f"Headers: {response.headers}")
+    return orjson.loads(json_str)
 
-    # Try to log the body, but limit it to avoid excessive logging
+
+def log_request(url: str, method: str, headers: Dict[str, str], body: Any) -> None:
+    """
+    Log details of an outgoing HTTP request.
+    """
+    logger.debug(f"> {method} {url}")
+    for name, value in headers.items():
+        logger.debug(f"> {name}: {value}")
+    if body:
+        if isinstance(body, (dict, list)):
+            body_str = serialize_json(body)
+        else:
+            body_str = str(body)
+        if len(body_str) > 1000:
+            logger.debug(f"> Body: {body_str[:1000]}... (truncated)")
+        else:
+            logger.debug(f"> Body: {body_str}")
+
+
+def log_response(response: httpx.Response) -> None:
+    """
+    Log details of an HTTP response.
+    """
+    logger.debug(f"< HTTP {response.status_code} {response.reason_phrase}")
+    for name, value in response.headers.items():
+        logger.debug(f"< {name}: {value}")
     try:
-        content_type = response.headers.get("content-type", "")
-        if "application/json" in content_type or "application/javascript" in content_type:
+        if "application/json" in response.headers.get("content-type", ""):
             body = response.json()
-            # Truncate large responses
-            if isinstance(body, dict) and len(body) > 5:
-                truncated_body = {k: body[k] for k in list(body.keys())[:5]}
-                truncated_body["..."] = f"(truncated, {len(body)} keys total)"
-                logger.debug(f"Body (truncated): {truncated_body}")
-            else:
-                logger.debug(f"Body: {body}")
+            body_str = serialize_json(body)
         else:
-            text = response.text
-            if len(text) > 500:
-                logger.debug(f"Body: {text[:500]}... (truncated, {len(text)} characters total)")
-            else:
-                logger.debug(f"Body: {text}")
-    except Exception as e:
-        logger.debug(f"Could not parse response body: {str(e)}")
+            body_str = response.text
 
-
-def sanitize_sensitive_data(data: Any) -> Any:
-    """
-    Sanitize sensitive information in data like passwords, tokens, etc.
-
-    Args:
-        data: The data to sanitize
-
-    Returns:
-        Sanitized data with sensitive information masked
-    """
-    sensitive_keys = [
-        "password",
-        "passwd",
-        "secret",
-        "token",
-        "api_key",
-        "apikey",
-        "access_token",
-        "auth",
-        "credentials",
-        "private",
-    ]
-
-    if isinstance(data, dict):
-        sanitized = {}
-        for key, value in data.items():
-            key_lower = key.lower() if isinstance(key, str) else ""
-            if any(sensitive in key_lower for sensitive in sensitive_keys) and value:
-                sanitized[key] = "********"
-            else:
-                sanitized[key] = sanitize_sensitive_data(value)
-        return sanitized
-    elif isinstance(data, list):
-        return [sanitize_sensitive_data(item) for item in data]
-    else:
-        return data
-
-
-def select_json_path(data: Any, path: str) -> Any:
-    """
-    Extract data from JSON using JSONPath syntax.
-
-    Args:
-        data: JSON data (parsed, not string)
-        path: JSONPath expression (e.g., '$.store.book[0].title')
-
-    Returns:
-        Extracted data or None if the path doesn't match
-
-    Raises:
-        ValueError: If the JSONPath expression is invalid
-    """
-    try:
-        jsonpath_expr = jsonpath_parse(path)
-        matches = [match.value for match in jsonpath_expr.find(data)]
-        if not matches:
-            return None
-        elif len(matches) == 1:
-            return matches[0]  # Return single value directly
+        if len(body_str) > 1000:
+            logger.debug(f"< Body: {body_str[:1000]}... (truncated)")
         else:
-            return matches  # Return list of values
-    except JsonPathParserError as e:
-        raise ValueError(f"Invalid JSONPath expression: {str(e)}")
+            logger.debug(f"< Body: {body_str}")
     except Exception as e:
-        raise ValueError(f"Error extracting data with JSONPath: {str(e)}")
-
-
-def time_request(func: Callable) -> Callable:
-    """
-    A decorator to time HTTP requests for performance monitoring.
-
-    Args:
-        func: The function to decorate
-
-    Returns:
-        Decorated function that logs timing information
-    """
-
-    async def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = await func(*args, **kwargs)
-        elapsed_time = time.time() - start_time
-        logger.debug(f"Request completed in {elapsed_time:.4f} seconds")
-        return result
-
-    return wrapper
+        logger.debug(f"< Body (failed to parse): {e}")
 
 
 def format_curl_command(
     method: str,
     url: str,
-    headers: Dict[str, str] = None,
-    data: Any = None,
-    params: Dict[str, str] = None,
+    headers: Dict[str, str],
+    body: Any,
+    params: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
-    Format a curl command from request parameters for debugging and sharing.
+    Format a curl command equivalent to the HTTP request.
 
     Args:
         method: HTTP method
         url: Request URL
         headers: Request headers
-        data: Request body
-        params: Request query parameters
+        body: Request body
+        params: Query parameters
 
     Returns:
-        curl command as a string
+        Formatted curl command
     """
-    curl_command = f"curl -X {method}"
+    cmd_parts = ["curl", "-X", method]
 
-    if headers:
-        for key, value in headers.items():
-            curl_command += f" -H '{key}: {value}'"
-
-    if data:
-        if isinstance(data, dict):
-            data_str = serialize_json(data)
-            curl_command += f" -d '{data_str}'"
-        elif isinstance(data, str):
-            curl_command += f" -d '{data}'"
-
-    # Add parameters to URL if any
+    # Add URL with query parameters
     if params:
-        import urllib.parse
-
-        query_string = "&".join(f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items())
+        query_string = urlencode(params)
         if "?" in url:
-            url = f"{url}&{query_string}"
+            url += f"&{query_string}"
         else:
-            url = f"{url}?{query_string}"
+            url += f"?{query_string}"
 
-    curl_command += f" '{url}'"
-    return curl_command
+    cmd_parts.append(shlex.quote(url))
+
+    # Add headers
+    for name, value in headers.items():
+        cmd_parts.extend(["-H", shlex.quote(f"{name}: {value}")])
+
+    # Add request body
+    if body:
+        if isinstance(body, (dict, list)):
+            body_str = json.dumps(body)
+            cmd_parts.extend(["-d", shlex.quote(body_str)])
+        elif isinstance(body, str):
+            cmd_parts.extend(["-d", shlex.quote(body)])
+
+    # Join all parts with spaces
+    return " ".join(cmd_parts)
+
+
+def _build_replace_dict(source: dict, target: dict, prefix: str = "") -> Dict[str, Tuple[Any, Any]]:
+    """Build a dictionary of changes between two dictionaries."""
+    result = {}
+
+    # Find added/changed keys
+    for key, value in target.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if key not in source:
+            result[path] = (None, value)
+        elif isinstance(value, dict) and isinstance(source[key], dict):
+            result.update(_build_replace_dict(source[key], value, path))
+        elif value != source[key]:
+            result[path] = (source[key], value)
+
+    # Find removed keys
+    for key in source:
+        path = f"{prefix}.{key}" if prefix else key
+        if key not in target and path not in result:
+            result[path] = (source[key], None)
+
+    return result
+
+
+def dict_diff(source: dict, target: dict) -> Dict[str, Tuple[Any, Any]]:
+    """
+    Generate a diff between two dictionaries.
+
+    Args:
+        source: Source dictionary
+        target: Target dictionary
+
+    Returns:
+        Dictionary where keys are paths and values are (old_value, new_value) tuples
+    """
+    return _build_replace_dict(source, target)
+
+
+def select_json_path(data: Union[dict, list], json_path: str) -> Any:
+    """
+    Select data using JSONPath expressions.
+
+    Args:
+        data: Input data (dict or list)
+        json_path: JSONPath expression
+
+    Returns:
+        Selected data
+
+    Raises:
+        ValueError: If JSONPath is invalid
+    """
+    try:
+        # Parse the JSONPath expression
+        jsonpath_expr = jsonpath_ng.parse(json_path)
+
+        # Find all matches
+        matches = [match.value for match in jsonpath_expr.find(data)]
+
+        # Return the matches
+        if len(matches) == 1:
+            return matches[0]
+        elif len(matches) > 1:
+            return matches
+        else:
+            return None
+    except Exception as e:
+        raise ValueError(f"Invalid JSONPath expression: {str(e)}")
+
+
+def is_rate_limited(response: httpx.Response) -> bool:
+    """
+    Check if a response indicates rate limiting.
+
+    Args:
+        response: HTTP response to check
+
+    Returns:
+        True if rate limited, False otherwise
+    """
+    status_code = response.status_code
+
+    # Common rate limit status codes
+    if status_code in (429, 418):  # Too Many Requests, I'm a teapot (used by some APIs)
+        return True
+
+    # Check for rate limit headers
+    headers = response.headers
+    rate_limit_headers = [
+        "x-rate-limit-remaining",
+        "x-ratelimit-remaining",
+        "ratelimit-remaining",
+        "retry-after",
+        "x-retry-after",
+    ]
+
+    for header in rate_limit_headers:
+        if header in headers:
+            value = headers[header]
+            try:
+                # If it's a numeric value and zero or negative, it's rate limited
+                if float(value) <= 0:
+                    return True
+            except (ValueError, TypeError):
+                # Not a numeric value
+                pass
+
+    return False
+
+
+def get_retry_after(response: httpx.Response) -> Optional[float]:
+    """
+    Get the retry-after value from a response.
+
+    Args:
+        response: HTTP response to check
+
+    Returns:
+        Number of seconds to wait before retrying, or None if not available
+    """
+    headers = response.headers
+
+    # Check Retry-After header (could be seconds or HTTP date)
+    retry_after = headers.get("retry-after") or headers.get("x-retry-after")
+    if retry_after:
+        try:
+            # Try to parse as number of seconds
+            return float(retry_after)
+        except (ValueError, TypeError):
+            # Try to parse as HTTP date
+            try:
+                from email.utils import parsedate_to_datetime
+
+                retry_date = parsedate_to_datetime(retry_after)
+                now = time.time()
+                return max(0, (retry_date.timestamp() - now))
+            except (TypeError, ValueError):
+                pass
+
+    # Check rate limit reset headers
+    reset_headers = ["x-rate-limit-reset", "x-ratelimit-reset", "ratelimit-reset"]
+
+    for header in reset_headers:
+        if header in headers:
+            try:
+                reset_time = float(headers[header])
+                now = time.time()
+
+                # Some APIs return seconds since epoch
+                if reset_time > now:
+                    return reset_time - now
+                # Some APIs return seconds from now
+                else:
+                    return reset_time
+            except (ValueError, TypeError):
+                pass
+
+    return None

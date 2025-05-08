@@ -10,6 +10,11 @@ An enhanced HTTP client library built on top of [httpx](https://www.python-httpx
 - ✅ **Fully asynchronous** HTTP client with `async`/`await` syntax
 - ✅ **Automatic retries** with configurable backoff strategy
 - ✅ **Connection pooling** for optimal performance
+- ✅ **HTTP/2 and HTTP/3 support** for improved performance
+- ✅ **Response caching** with configurable TTL
+- ✅ **Rate limiting** with token bucket algorithm
+- ✅ **Middleware support** for request/response processing
+- ✅ **Batch requests** with concurrency controls
 - ✅ **JSON path selectors** to extract specific data from responses
 - ✅ **Type validation** with Pydantic models
 - ✅ **Advanced error handling** with specific exception types
@@ -17,6 +22,7 @@ An enhanced HTTP client library built on top of [httpx](https://www.python-httpx
 - ✅ **CLI interface** for quick HTTP requests from the terminal
 - ✅ **Security features** with proper SSL/TLS configuration
 - ✅ **Performance optimizations** with uvloop
+- ✅ **Metrics collection** for request performance analysis
 
 ## Installation
 
@@ -169,8 +175,103 @@ client = EnhancedClient(
     max_retries=3,
     retry_backoff=0.5,
     http2=True,
-    debug=False
+    enable_http3=False,  # Enable HTTP/3 support
+    debug=False,
+    enable_cache=True,   # Enable response caching
+    cache_ttl=300,       # Cache TTL in seconds
+    rate_limit=100,      # Rate limit (requests per second)
 )
+```
+
+### Using Middleware
+
+You can add middleware functions to modify requests before they are sent or responses before they are returned:
+
+```python
+import asyncio
+from enhanced_httpx import EnhancedClient
+
+# Define a request middleware
+async def add_auth_header(method, url, request_kwargs):
+    headers = request_kwargs.get("headers", {})
+    headers["Authorization"] = "Bearer token123"
+    request_kwargs["headers"] = headers
+    return request_kwargs
+
+# Define a response middleware
+async def log_response_time(response):
+    print(f"Request to {response.url} took {response.elapsed.total_seconds():.2f}s")
+    return response
+
+async def main():
+    # Create a client with middleware
+    async with EnhancedClient() as client:
+        # Add middleware
+        client.add_request_middleware(add_auth_header)
+        client.add_response_middleware(log_response_time)
+        
+        # Make a request - middleware will be applied
+        response = await client.get("https://httpbin.org/get")
+        print(response.json())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Batch Requests
+
+Process multiple requests concurrently with batch mode:
+
+```python
+import asyncio
+from enhanced_httpx import EnhancedClient, BatchRequestItem
+
+async def main():
+    async with EnhancedClient() as client:
+        # Create a batch of requests
+        batch = client.create_batch()
+        
+        # Add requests to the batch
+        batch.add_request("GET", "https://httpbin.org/get")
+        batch.add_request("POST", "https://httpbin.org/post", json={"name": "John"})
+        batch.add_request("GET", "https://httpbin.org/delay/1")
+        
+        # Execute all requests concurrently (with max_connections limit)
+        responses = await client.execute_batch(batch, max_connections=5)
+        
+        # Process responses
+        for i, response in enumerate(responses):
+            print(f"Response {i+1} status: {response.status_code}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Caching Responses
+
+Configure caching for repeated requests:
+
+```python
+import asyncio
+from enhanced_httpx import EnhancedClient
+
+async def main():
+    # Enable caching with 60 second TTL
+    async with EnhancedClient(enable_cache=True, cache_ttl=60) as client:
+        # First request will be sent to server
+        response1 = await client.get("https://httpbin.org/get")
+        print("First request:", response1.elapsed.total_seconds())
+        
+        # Second request will use cached response (much faster)
+        response2 = await client.get("https://httpbin.org/get")
+        print("Second request (cached):", response2.elapsed.total_seconds())
+        
+        # Force refresh cache for this request
+        response3 = await client.get("https://httpbin.org/get", force_refresh=True)
+        print("Third request (forced refresh):", response3.elapsed.total_seconds())
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ## Command Line Interface

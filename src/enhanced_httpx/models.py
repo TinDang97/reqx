@@ -1,10 +1,15 @@
+"""
+Data models for the enhanced-httpx library.
+"""
+
 from pydantic import BaseModel, HttpUrl, Field, validator, root_validator, TypeAdapter
 from pydantic.version import VERSION as PYDANTIC_VERSION
-from typing import Optional, Any, Dict, Union, List, TypeVar, Generic, Type
+from typing import Optional, Any, Dict, Union, List, TypeVar, Generic, Type, Callable, Awaitable
 from enum import Enum
 import json
 import re
 from datetime import datetime
+import httpx
 
 T = TypeVar("T")
 
@@ -136,3 +141,70 @@ class GenericResponse(Generic[T], BaseModel):
     def has_errors(self) -> bool:
         """Check if the response contains errors."""
         return self.errors is not None and len(self.errors) > 0
+
+
+class RequestBatch(BaseModel):
+    """A batch of HTTP requests to be executed together."""
+
+    requests: List[Dict[str, Any]] = Field(default_factory=list)
+    max_connections: int = 10
+    timeout: float = 30.0
+
+    def add_request(self, method: HttpMethod, url: str, **kwargs) -> int:
+        """
+        Add a request to the batch.
+
+        Args:
+            method: HTTP method
+            url: URL
+            **kwargs: Additional arguments to pass to httpx.request
+
+        Returns:
+            The index of the added request in the batch
+        """
+        request = {"method": method, "url": url, **kwargs}
+        self.requests.append(request)
+        return len(self.requests) - 1
+
+    async def execute(self, client: httpx.AsyncClient) -> List[httpx.Response]:
+        """
+        Execute all requests in the batch concurrently.
+
+        Args:
+            client: HTTP client to use
+
+        Returns:
+            List of responses in the same order as the requests
+        """
+        import asyncio
+
+        # Use a semaphore to limit the number of concurrent connections
+        semaphore = asyncio.Semaphore(self.max_connections)
+
+        async def fetch(request_args):
+            async with semaphore:
+                return await client.request(**request_args)
+
+        # Create tasks for all requests
+        tasks = [fetch(request) for request in self.requests]
+
+        # Execute all tasks concurrently and gather results
+        return await asyncio.gather(*tasks, return_exceptions=True)
+
+    def clear(self) -> None:
+        """Clear all requests from the batch."""
+        self.requests.clear()
+
+
+class RequestHook(BaseModel):
+    """Hook for request interception and modification."""
+
+    callback: Optional[Callable] = None
+    async_callback: Optional[Callable[[str, str, Dict[str, Any]], Awaitable[Dict[str, Any]]]] = None
+
+
+class ResponseHook(BaseModel):
+    """Hook for response interception and modification."""
+
+    callback: Optional[Callable] = None
+    async_callback: Optional[Callable[[httpx.Response], Awaitable[httpx.Response]]] = None

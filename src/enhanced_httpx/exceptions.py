@@ -108,6 +108,14 @@ class ConfigurationError(HTTPXError):
     pass
 
 
+class MiddlewareError(HTTPXError):
+    """Exception raised when a middleware encounters an error."""
+
+    def __init__(self, message: str, original_exception: Optional[Exception] = None):
+        self.original_exception = original_exception
+        super().__init__(message)
+
+
 class HTTPStatusError(ResponseError):
     """Exception that maps HTTP status codes to specific error classes."""
 
