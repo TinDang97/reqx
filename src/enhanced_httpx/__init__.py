@@ -1,0 +1,96 @@
+"""
+Enhanced HTTPX Package
+
+This package provides an enhanced HTTP client built on top of httpx, allowing for custom HTTP requests
+with user-defined headers, cookies, and body in an asynchronous manner. It includes Pydantic models for
+request and response validation, custom exceptions, and a command-line interface for easy usage.
+
+Features:
+- Asynchronous HTTP requests with httpx
+- Automatic retries with exponential backoff
+- Connection pooling for performance
+- JSON path selectors for response data extraction
+- Comprehensive error handling
+- Command-line interface
+- Type validation with Pydantic
+- Fast JSON serialization with orjson
+- SSL/TLS security features
+"""
+
+__version__ = "0.1.0"
+
+# Core client
+from .client import EnhancedClient
+
+# Models
+from .models import (
+    HttpMethod,
+    RequestModel,
+    ResponseModel,
+    GenericResponse,
+)
+
+# Exceptions
+from .exceptions import (
+    HTTPXError,
+    RequestError,
+    ResponseError,
+    NetworkError,
+    TimeoutError,
+    SSLError,
+    ClientError,
+    ServerError,
+    ValidationError,
+    AuthenticationError,
+    ForbiddenError,
+    NotFoundError,
+    SessionError,
+    ConfigurationError,
+    HTTPStatusError,
+)
+
+# Utils
+from .utils import (
+    serialize_json,
+    deserialize_json,
+    select_json_path,
+    format_curl_command,
+    time_request,
+)
+
+# CLI entry point
+from .cli import cli as cli_app
+
+__all__ = [
+    # Client
+    "EnhancedClient",
+    # Models
+    "HttpMethod",
+    "RequestModel",
+    "ResponseModel",
+    "GenericResponse",
+    # Exceptions
+    "HTTPXError",
+    "RequestError",
+    "ResponseError",
+    "NetworkError",
+    "TimeoutError",
+    "SSLError",
+    "ClientError",
+    "ServerError",
+    "ValidationError",
+    "AuthenticationError",
+    "ForbiddenError",
+    "NotFoundError",
+    "SessionError",
+    "ConfigurationError",
+    "HTTPStatusError",
+    # Utils
+    "serialize_json",
+    "deserialize_json",
+    "select_json_path",
+    "format_curl_command",
+    "time_request",
+    # CLI
+    "cli_app",
+]
