@@ -1,5 +1,5 @@
 """
-Command-line interface for enhanced-httpx.
+Command-line interface for reqx.
 
 This module provides a CLI for making HTTP requests directly from the terminal,
 similar to tools like curl or httpie but with the enhanced features of the library.
@@ -13,7 +13,7 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from .client import EnhancedClient
+from .client import ReqxClient
 
 # from .middleware import CompressionMiddleware, TracingMiddleware
 
@@ -22,7 +22,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("enhanced_httpx.cli")
+logger = logging.getLogger("reqx.cli")
 
 
 def parse_key_value(s: str) -> tuple:
@@ -161,7 +161,7 @@ async def make_request(args):
         request_kwargs["params"] = parse_data(args.params)
 
     # Create client
-    async with EnhancedClient(**client_kwargs) as client:
+    async with ReqxClient(**client_kwargs) as client:
         # # Add middleware as needed
         # if args.compress:
         #     compression = CompressionMiddleware(
@@ -226,7 +226,7 @@ async def make_request(args):
 
 def create_parser():
     """Create and configure the argument parser."""
-    parser = argparse.ArgumentParser(description="Enhanced HTTPX - Command line HTTP client")
+    parser = argparse.ArgumentParser(description="Reqx - Command line HTTP client")
     parser.add_argument(
         "url",
         help="URL to request",

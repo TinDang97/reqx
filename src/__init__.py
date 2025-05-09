@@ -1,5 +1,5 @@
 """
-Enhanced HTTPX Package
+Reqx Package
 
 This package provides an enhanced HTTP client built on top of httpx, allowing for custom HTTP
 requests with user-defined headers, cookies, and body in an asynchronous manner.
@@ -24,7 +24,7 @@ __version__ = "0.1.0"
 from . import cli as cli_app
 
 # Core client
-from .client import EnhancedClient
+from .client import ReqxClient
 
 # Exceptions
 from .exceptions import (
@@ -53,7 +53,7 @@ from .utils import deserialize_json, format_curl_command, select_json_path, seri
 
 __all__ = [
     # Client
-    "EnhancedClient",
+    "ReqxClient",
     # Models
     "HttpMethod",
     "RequestModel",

@@ -196,9 +196,9 @@ class CertificatePinner:
         )
 
 
-class EnhancedClient:
+class ReqxClient:
     """
-    An enhanced HTTP client built on top of httpx with additional features
+    A high-performance HTTP client built on top of httpx with additional features
     for performance, security, and usability.
     """
 
@@ -225,7 +225,7 @@ class EnhancedClient:
         certificate_pins: Dict[str, List[str]] | None = None,  # Certificate pinning configuration
     ):
         """
-        Initialize the EnhancedClient with custom configuration.
+        Initialize the ReqxClient with custom configuration.
 
         Args:
             base_url: Base URL for all requests

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "enhanced-httpx"
+name = "reqx"
 version = "0.1.0"
 description = "An enhanced HTTP client built on top of httpx for custom HTTP requests with async support."
 readme = "README.md"
@@ -42,16 +42,16 @@ compression = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/yourusername/enhanced-httpx"
-"Bug Tracker" = "https://github.com/yourusername/enhanced-httpx/issues"
-"Documentation" = "https://github.com/yourusername/enhanced-httpx"
-"Source Code" = "https://github.com/yourusername/enhanced-httpx"
+"Homepage" = "https://github.com/yourusername/reqx"
+"Bug Tracker" = "https://github.com/yourusername/reqx/issues"
+"Documentation" = "https://github.com/yourusername/reqx"
+"Source Code" = "https://github.com/yourusername/reqx"
 
 [project.scripts]
-enhanced-httpx = "enhanced_httpx.cli:cli"
+reqx = "reqx.cli:cli"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/enhanced_httpx"]
+packages = ["src/reqx"]
 
 [tool.black]
 line-length = 100

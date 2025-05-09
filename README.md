@@ -1,4 +1,4 @@
-# Enhanced HTTPX
+# Reqx
 
 An enhanced HTTP client library built on top of [httpx](https://www.python-httpx.org/) for making custom HTTP requests with async support. This library provides a convenient and powerful API for handling HTTP requests with features like connection pooling, automatic retries, JSON path selectors, and more.
 
@@ -26,16 +26,16 @@ An enhanced HTTP client library built on top of [httpx](https://www.python-httpx
 
 ## Installation
 
-Enhanced HTTPX requires Python 3.8+ and can be installed using `uv`:
+Reqx requires Python 3.8+ and can be installed using `uv`:
 
 ```bash
-uv pip install enhanced-httpx
+uv pip install reqx
 ```
 
 Or using pip:
 
 ```bash
-pip install enhanced-httpx
+pip install reqx
 ```
 
 ### Optional Dependencies
@@ -44,32 +44,32 @@ To install with optional features:
 
 ```bash
 # For Brotli compression support
-pip install enhanced-httpx[compression]
+pip install reqx[compression]
 
 # For development tools
-pip install enhanced-httpx[dev]
+pip install reqx[dev]
 
 # For multiple extras
-pip install enhanced-httpx[compression,dev]
+pip install reqx[compression,dev]
 ```
 
 ## Benchmark Results
 
 | Client         | Requests | Duration (s) | Req/sec   | Avg Request (ms) | Memory (KB) |
 |----------------|----------|--------------|-----------|------------------|-------------|
-| enhanced_httpx | 100      | 0.004        | 24,736.7  | 0.04             | 2,486       |
+| reqx           | 100      | 0.004        | 24,736.7  | 0.04             | 2,486       |
 | aiohttp        | 100      | 2.286        | 43.87     | 22.86            | 27,882      |
 | httpx          | 100      | 2.599        | 39.67     | 25.99            | 3,416.33    |
 
 **Relative Performance:**
 
-- `enhanced_httpx` is 99.8% faster than `aiohttp`
-- `enhanced_httpx` is 99.8% faster than `httpx`
+- `reqx` is 99.8% faster than `aiohttp`
+- `reqx` is 99.8% faster than `httpx`
 
 **Memory Efficiency:**
 
-- `enhanced_httpx` uses 1,021.6% less memory than `aiohttp`
-- `enhanced_httpx` uses 37.4% less memory than `httpx`
+- `reqx` uses 1,021.6% less memory than `aiohttp`
+- `reqx` uses 37.4% less memory than `httpx`
 
 _Results exported to `benchmark_results.json`_
 _*note: no cache applied_
@@ -80,11 +80,11 @@ _*note: no cache applied_
 
 ```python
 import asyncio
-from enhanced_httpx import EnhancedClient
+from reqx import ReqxClient
 
 async def main():
     # Create a client
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         # Make a GET request
         response = await client.get("https://httpbin.org/get")
         print(f"Status code: {response.status_code}")
@@ -108,7 +108,7 @@ You can automatically parse responses into Pydantic models:
 ```python
 import asyncio
 from pydantic import BaseModel
-from enhanced_httpx import EnhancedClient
+from reqx import ReqxClient
 
 class User(BaseModel):
     id: int
@@ -116,7 +116,7 @@ class User(BaseModel):
     email: str
 
 async def main():
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         # Parse response directly into a model
         user = await client.get(
             "https://jsonplaceholder.typicode.com/users/1",
@@ -135,10 +135,10 @@ Extract specific data from JSON responses using JSONPath syntax:
 
 ```python
 import asyncio
-from enhanced_httpx import EnhancedClient, select_json_path
+from reqx import ReqxClient, select_json_path
 
 async def main():
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         response = await client.get("https://jsonplaceholder.typicode.com/users")
         data = response.json()
 
@@ -160,13 +160,13 @@ The library provides detailed exceptions for different error cases:
 
 ```python
 import asyncio
-from enhanced_httpx import EnhancedClient
-from enhanced_httpx.exceptions import (
+from reqx import ReqxClient
+from reqx.exceptions import (
     NotFoundError, ServerError, TimeoutError
 )
 
 async def main():
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         try:
             # This will raise a NotFoundError
             await client.get("https://httpbin.org/status/404")
@@ -197,10 +197,10 @@ if __name__ == "__main__":
 You can configure the client with various options:
 
 ```python
-from enhanced_httpx import EnhancedClient
+from reqx import ReqxClient
 
 # Create a client with custom configuration
-client = EnhancedClient(
+client = ReqxClient(
     base_url="https://api.example.com",
     timeout=30.0,
     max_connections=100,
@@ -224,15 +224,15 @@ client = EnhancedClient(
 Enhanced HTTPX supports request compression using various algorithms. For Brotli compression, install the optional dependency:
 
 ```bash
-pip install enhanced-httpx[compression]
+pip install reqx[compression]
 ```
 
 Then use the CompressionMiddleware:
 
 ```python
 import asyncio
-from enhanced_httpx import EnhancedClient
-from enhanced_httpx.middleware import CompressionMiddleware, MiddlewareChain
+from reqx import ReqxClient
+from reqx.middleware import CompressionMiddleware, MiddlewareChain
 
 async def main():
     # Create middleware chain with compression
@@ -245,7 +245,7 @@ async def main():
     ))
 
     # Create client with middleware
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         client.middleware = middleware
 
         # The request body will be automatically compressed
@@ -265,7 +265,7 @@ You can add middleware functions to modify requests before they are sent or resp
 
 ```python
 import asyncio
-from enhanced_httpx import EnhancedClient
+from reqx import ReqxClient
 
 # Define a request middleware
 async def add_auth_header(method, url, request_kwargs):
@@ -281,7 +281,7 @@ async def log_response_time(response):
 
 async def main():
     # Create a client with middleware
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         # Add middleware
         client.add_request_middleware(add_auth_header)
         client.add_response_middleware(log_response_time)
@@ -300,10 +300,10 @@ Process multiple requests concurrently with batch mode:
 
 ```python
 import asyncio
-from enhanced_httpx import EnhancedClient, BatchRequestItem
+from reqx import ReqxClient, BatchRequestItem
 
 async def main():
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         # Create a batch of requests
         batch = client.create_batch()
 
@@ -329,11 +329,11 @@ Configure caching for repeated requests:
 
 ```python
 import asyncio
-from enhanced_httpx import EnhancedClient
+from reqx import ReqxClient
 
 async def main():
     # Enable caching with 60 second TTL
-    async with EnhancedClient(enable_cache=True, cache_ttl=60) as client:
+    async with ReqxClient(enable_cache=True, cache_ttl=60) as client:
         # First request will be sent to server
         response1 = await client.get("https://httpbin.org/get")
         print("First request:", response1.elapsed.total_seconds())
@@ -356,22 +356,22 @@ Enhanced HTTPX comes with a CLI for making HTTP requests from the terminal:
 
 ```bash
 # Basic GET request
-enhanced-httpx get https://httpbin.org/get
+reqx get https://httpbin.org/get
 
 # POST with JSON data
-enhanced-httpx post https://httpbin.org/post -j '{"name": "John", "age": 30}'
+reqx post https://httpbin.org/post -j '{"name": "John", "age": 30}'
 
 # Custom headers and parameters
-enhanced-httpx get https://httpbin.org/get -H "Authorization=Bearer token123" -p "query=test"
+reqx get https://httpbin.org/get -H "Authorization=Bearer token123" -p "query=test"
 
 # Extract specific data with JSONPath
-enhanced-httpx get https://jsonplaceholder.typicode.com/users --json-path "$[*].email"
+reqx get https://jsonplaceholder.typicode.com/users --json-path "$[*].email"
 
 # Save response to file
-enhanced-httpx get https://httpbin.org/json --pretty --save response.json
+reqx get https://httpbin.org/json --pretty --save response.json
 
 # Debug mode
-enhanced-httpx --debug get https://httpbin.org/headers
+reqx --debug get https://httpbin.org/headers
 ```
 
 ## Performance
@@ -395,8 +395,8 @@ To set up the development environment:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/enhanced-httpx.git
-cd enhanced-httpx
+git clone https://github.com/yourusername/reqx.git
+cd reqx
 
 # Install the package in development mode
 uv pip install -e ".[dev]"

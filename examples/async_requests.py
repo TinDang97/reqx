@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Example demonstrating various async request capabilities of the enhanced-httpx library.
+Example demonstrating various async request capabilities of the reqx library.
 This example shows handling multiple concurrent requests, using response models,
 request retries, and JSON path extraction.
 """
@@ -13,9 +13,9 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-# Add parent directory to path for importing enhanced_httpx
+# Add parent directory to path for importing reqx
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src import EnhancedClient, select_json_path
+from src import ReqxClient, select_json_path
 
 
 # Define Pydantic models for API responses
@@ -49,7 +49,7 @@ class Comment(BaseModel):
     body: str
 
 
-async def fetch_user_with_posts(client: EnhancedClient, user_id: int):
+async def fetch_user_with_posts(client: ReqxClient, user_id: int):
     """Fetch a user and their posts."""
     print(f"\n--- Fetching user {user_id} with posts ---")
 
@@ -79,7 +79,7 @@ async def fetch_user_with_posts(client: EnhancedClient, user_id: int):
     return user, posts
 
 
-async def fetch_with_json_path(client: EnhancedClient):
+async def fetch_with_json_path(client: ReqxClient):
     """Demonstrate using JSONPath to extract specific data from responses."""
     print("\n--- Using JSONPath to extract data ---")
 
@@ -106,12 +106,12 @@ async def fetch_with_json_path(client: EnhancedClient):
         print(f"  - Lat: {coords['lat']}, Lng: {coords['lng']}")
 
 
-async def demonstrate_retry_mechanism(client: EnhancedClient):
+async def demonstrate_retry_mechanism(client: ReqxClient):
     """Demonstrate the retry mechanism."""
     print("\n--- Demonstrating retry mechanism ---")
 
     # Configure client with custom retry settings
-    retry_client = EnhancedClient(
+    retry_client = ReqxClient(
         timeout=2.0,  # Short timeout to trigger faster
         max_retries=3,
         retry_backoff=0.5,
@@ -129,7 +129,7 @@ async def demonstrate_retry_mechanism(client: EnhancedClient):
     await retry_client.close()
 
 
-async def batch_requests_with_rate_limiting(client: EnhancedClient):
+async def batch_requests_with_rate_limiting(client: ReqxClient):
     """Demonstrate batch requests with rate limiting."""
     print("\n--- Batch requests with rate limiting ---")
 
@@ -167,11 +167,11 @@ async def batch_requests_with_rate_limiting(client: EnhancedClient):
 
 async def main():
     """Main function to run all examples."""
-    print("Enhanced HTTPX Library Examples")
-    print("==============================\n")
+    print("Reqx Library Examples")
+    print("====================\n")
 
     # Create a shared client
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         # Example 1: Fetch a user with their posts
         await fetch_user_with_posts(client, 1)
 
@@ -182,7 +182,7 @@ async def main():
         await batch_requests_with_rate_limiting(client)
 
     # Example 4: Demonstrate retry mechanism with a separate client
-    await demonstrate_retry_mechanism(EnhancedClient())
+    await demonstrate_retry_mechanism(ReqxClient())
 
     print("\nAll examples completed!")
 
