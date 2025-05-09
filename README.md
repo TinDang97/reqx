@@ -53,6 +53,27 @@ pip install enhanced-httpx[dev]
 pip install enhanced-httpx[compression,dev]
 ```
 
+## Benchmark Results
+
+| Client         | Requests | Duration (s) | Req/sec   | Avg Request (ms) | Memory (KB) |
+|----------------|----------|--------------|-----------|------------------|-------------|
+| enhanced_httpx | 100      | 0.004        | 24,736.7  | 0.04             | 2,486       |
+| aiohttp        | 100      | 2.286        | 43.87     | 22.86            | 27,882      |
+| httpx          | 100      | 2.599        | 39.67     | 25.99            | 3,416.33    |
+
+**Relative Performance:**
+
+- `enhanced_httpx` is 99.8% faster than `aiohttp`
+- `enhanced_httpx` is 99.8% faster than `httpx`
+
+**Memory Efficiency:**
+
+- `enhanced_httpx` uses 1,021.6% less memory than `aiohttp`
+- `enhanced_httpx` uses 37.4% less memory than `httpx`
+
+_Results exported to `benchmark_results.json`_
+_*note: no cache applied_
+
 ## Quick Start
 
 ### Basic Usage

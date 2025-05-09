@@ -21,7 +21,7 @@ Features:
 __version__ = "0.1.0"
 
 # CLI entry point
-import cli as cli_app
+from . import cli as cli_app
 
 # Core client
 from .client import EnhancedClient
