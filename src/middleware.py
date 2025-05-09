@@ -9,7 +9,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, List, Optional, TypeVar, Union
+from typing import Any, Awaitable, Callable, Dict, List, TypeVar
 
 import httpx
 
@@ -90,9 +90,10 @@ class MiddlewareChain:
                 current_request = await middleware.process_request(current_request)
             except Exception as e:
                 logger.error(
-                    f"Error in middleware {middleware.__class__.__name__} during request processing: {str(e)}"
+                    f"Error in middleware {middleware.__class__.__name__} "
+                    f"during request processing: {str(e)}"
                 )
-                raise MiddlewareError(f"Request middleware error: {str(e)}")
+                raise MiddlewareError(f"Request middleware error: {str(e)}") from e
 
         return current_request
 
@@ -116,9 +117,10 @@ class MiddlewareChain:
                 current_response = await middleware.process_response(current_response, request)
             except Exception as e:
                 logger.error(
-                    f"Error in middleware {middleware.__class__.__name__} during response processing: {str(e)}"
+                    f"Error in middleware {middleware.__class__.__name__} "
+                    f"during response processing: {str(e)}"
                 )
-                raise MiddlewareError(f"Response middleware error: {str(e)}")
+                raise MiddlewareError(f"Response middleware error: {str(e)}") from e
 
         return current_response
 
@@ -134,7 +136,7 @@ class LoggingMiddleware(Middleware):
         log_response_headers: bool = True,
         log_response_body: bool = False,
         include_sensitive_data: bool = False,
-        sensitive_headers: List[str] = None,
+        sensitive_headers: List[str] | None = None,
     ):
         """Initialize logging middleware.
 
@@ -243,11 +245,11 @@ class RetryMiddleware(Middleware):
     def __init__(
         self,
         max_retries: int = 3,
-        retry_statuses: List[int] = None,
-        retry_exceptions: List[type] = None,
+        retry_statuses: List[int] | None = None,
+        retry_exceptions: List[type] | None = None,
         backoff_factor: float = 0.5,
         respect_retry_after: bool = True,
-        retry_methods: List[str] = None,
+        retry_methods: List[str] | None = None,
     ):
         """Initialize retry middleware.
 
@@ -259,7 +261,6 @@ class RetryMiddleware(Middleware):
             respect_retry_after: Whether to respect Retry-After header
             retry_methods: HTTP methods to retry (default: GET, HEAD, OPTIONS)
         """
-        import asyncio
 
         self.max_retries = max_retries
         self.retry_statuses = retry_statuses or [429, 500, 502, 503, 504]
@@ -309,7 +310,8 @@ class RetryMiddleware(Middleware):
             # Calculate sleep time with exponential backoff
             sleep_time = self._get_sleep_time(response, retry_count)
             logger.info(
-                f"Retrying request after {sleep_time:.2f}s (attempt {retry_count + 1}/{self.max_retries})"
+                f"Retrying request after {sleep_time:.2f}s "
+                f"(attempt {retry_count + 1}/{self.max_retries})"
             )
 
             # Sleep before retry
@@ -419,7 +421,7 @@ class CompressionMiddleware(Middleware):
 
             # Add brotli if it's available
             try:
-                import brotli
+                import brotli  # type: ignore[import]
 
                 encodings.append("br")
             except ImportError:
@@ -446,6 +448,9 @@ class CompressionMiddleware(Middleware):
         if len(content) < self.min_size_to_compress:
             return request
 
+        # Initialize compressed to None
+        compressed = None
+
         # Compress the content
         if self.compress_type == "gzip":
             import gzip
@@ -457,17 +462,29 @@ class CompressionMiddleware(Middleware):
             compressed = zlib.compress(content)
         elif self.compress_type == "br":
             try:
-                import brotli
+                import brotli  # type: ignore[import]
 
                 compressed = brotli.compress(content)
             except ImportError:
                 logger.warning(
-                    "Brotli compression requested but brotli package not installed. Falling back to gzip."
+                    "Brotli compression requested but brotli package not installed. "
+                    "Falling back to gzip."
                 )
                 import gzip
 
                 compressed = gzip.compress(content)
                 self.compress_type = "gzip"  # Update so header is correct
+        else:
+            # This shouldn't happen due to validation in __init__, but just in case
+            logger.error(
+                f"Unsupported compression type: {self.compress_type}. Skipping compression."
+            )
+            return request
+
+        # Make sure compression was successful
+        if compressed is None:
+            logger.error("Compression failed. Returning uncompressed request.")
+            return request
 
         # Update request with compressed content
         request["content"] = compressed
@@ -483,7 +500,8 @@ class CompressionMiddleware(Middleware):
         compressed_size = len(compressed)
         compression_ratio = (original_size - compressed_size) / original_size * 100
         logger.debug(
-            f"Compressed request body with {self.compress_type}: {original_size} -> {compressed_size} bytes ({compression_ratio:.1f}% reduction)"
+            f"Compressed request body with {self.compress_type}: {original_size} "
+            f"-> {compressed_size} bytes ({compression_ratio:.1f}% reduction)"
         )
 
         return request
@@ -508,9 +526,9 @@ class CacheMiddleware(Middleware):
         self,
         max_entries: int = 100,
         ttl_seconds: int = 300,
-        cacheable_methods: List[str] = None,
-        cacheable_status_codes: List[int] = None,
-        cache_vary_headers: List[str] = None,
+        cacheable_methods: List[str] | None = None,
+        cacheable_status_codes: List[int] | None = None,
+        cache_vary_headers: List[str] | None = None,
     ):
         """Initialize caching middleware.
 
@@ -518,7 +536,8 @@ class CacheMiddleware(Middleware):
             max_entries: Maximum number of cached responses
             ttl_seconds: Time-to-live in seconds for cached entries
             cacheable_methods: HTTP methods that can be cached (default: GET, HEAD)
-            cacheable_status_codes: HTTP status codes that can be cached (default: 200, 203, 300, 301, 308)
+            cacheable_status_codes:
+                HTTP status codes that can be cached (default: 200, 203, 300, 301, 308)
             cache_vary_headers: Headers that should be included in the cache key (default: None)
         """
         self.max_entries = max_entries
@@ -563,7 +582,7 @@ class CacheMiddleware(Middleware):
         """Handle cache hits and store cacheable responses."""
         # Check if this was a cache hit
         cache_hit = request.pop("_cache_hit", (False, None))
-        if cache_hit[0]:
+        if cache_hit[0] and cache_hit[1] is not None:
             # Reconstruct response from cache
             return self._reconstruct_response(cache_hit[1], request)
 
@@ -599,7 +618,7 @@ class CacheMiddleware(Middleware):
                     # Remove least recently used entry
                     lru_key = min(self._cache.items(), key=lambda item: item[1][1])[0]
                     del self._cache[lru_key]
-                    logger.debug(f"Evicted LRU cache entry")
+                    logger.debug("Evicted LRU cache entry")
 
         return response
 
@@ -854,7 +873,7 @@ class TracingMiddleware(Middleware):
         # Create a trace ID that includes host, timestamp, and random component
         try:
             hostname = socket.gethostname()[:8]  # First 8 chars of hostname
-        except:
+        except Exception:
             hostname = "unknown"
 
         timestamp = int(time.time() * 1000) % 10000000  # 7 digit timestamp

@@ -1,7 +1,6 @@
 import json
 from datetime import datetime
 
-import orjson
 import pytest
 from enhanced_httpx.utils import (
     deserialize_json,

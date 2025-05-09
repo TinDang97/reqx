@@ -11,14 +11,11 @@ import json
 import logging
 import os
 import sys
-from typing import Any, Dict, List, Optional, Union
-from urllib.parse import urlparse
-
-import orjson
+from typing import Any, Dict, List
 
 from .client import EnhancedClient
-from .middleware import CompressionMiddleware, TracingMiddleware
-from .utils import deserialize_json, serialize_json
+
+# from .middleware import CompressionMiddleware, TracingMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -165,21 +162,21 @@ async def make_request(args):
 
     # Create client
     async with EnhancedClient(**client_kwargs) as client:
-        # Add middleware as needed
-        if args.compress:
-            compression = CompressionMiddleware(
-                compress_requests=True,
-                min_size_to_compress=500,  # Lower threshold for CLI
-                compress_type=args.compress_type,
-            )
-            client._middleware_chain.add(compression)
+        # # Add middleware as needed
+        # if args.compress:
+        #     compression = CompressionMiddleware(
+        #         compress_requests=True,
+        #         min_size_to_compress=500,  # Lower threshold for CLI
+        #         compress_type=args.compress_type,
+        #     )
+        #     client.add_middleware(compression)
 
-        if args.trace:
-            tracing = TracingMiddleware(
-                trace_header_name="X-Enhanced-HTTPX-Trace",
-                trace_all_headers=args.debug,
-            )
-            client._middleware_chain.add(tracing)
+        # if args.trace:
+        #     tracing = TracingMiddleware(
+        #         trace_header_name="X-Enhanced-HTTPX-Trace",
+        #         trace_all_headers=args.debug,
+        #     )
+        #     client.add_middleware(tracing)
 
         try:
             # Start timer
@@ -188,7 +185,14 @@ async def make_request(args):
             start_time = time.time()
 
             # Make the request
-            response = await client.request(method, url, **request_kwargs)
+            response = await client.request(
+                method=method,
+                url=url,
+                headers=request_kwargs.get("headers"),
+                params=request_kwargs.get("params"),
+                data=request_kwargs.get("data"),
+                json=request_kwargs.get("json"),
+            )
 
             # Calculate timing
             duration = time.time() - start_time
@@ -206,6 +210,9 @@ async def make_request(args):
                     colorize=not args.no_color,
                 )
             )
+            if response is None:
+                print("No response received.", file=sys.stderr)
+                return 1
 
             return response.status_code
         except Exception as e:

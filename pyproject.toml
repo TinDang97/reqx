@@ -33,6 +33,7 @@ dependencies = [
     "jsonpath-ng>=1.5.0",
     "click>=8.1.0",
     "typing-extensions>=4.7.0",
+    "python-jose>=3.4.0",
 ]
 
 [project.optional-dependencies]
@@ -55,11 +56,21 @@ packages = ["src/enhanced_httpx"]
 [tool.black]
 line-length = 100
 target-version = ["py38", "py39", "py310", "py311"]
+extend-exclude = '''
+    /build/
+    /dist/
+    /docs/
+    /examples/
+    /tests/
+    /.venv/
+    /scripts/
+'''
 
 [tool.isort]
 profile = "black"
 line_length = 100
 multi_line_output = 3
+skip = ["examples/", "tests/", "docs/", "build/", "dist/", ".venv/", "scripts/"]
 
 [tool.mypy]
 python_version = "3.8"
@@ -71,12 +82,26 @@ check_untyped_defs = true
 disallow_untyped_decorators = true
 no_implicit_optional = true
 strict_optional = true
+exclude = '''
+    /build/
+    /dist/
+    /docs/
+    /examples/
+    /tests/
+    /.venv/
+    /scripts/
+'''
 
 [tool.ruff]
 line-length = 100
 target-version = "py38"
+exclude = ["examples", "tests", "docs", "build", "dist", ".venv", "scripts"]
+
+[tool.ruff.lint]
+ignore = [
+    "F403",  # 'from module import *' used; unable to detect undefined names
+]
 select = ["E", "F", "B", "I"]
-ignore = []
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

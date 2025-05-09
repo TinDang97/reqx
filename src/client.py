@@ -5,38 +5,15 @@ import logging
 import os
 import ssl
 import time
-from datetime import datetime, timedelta
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    Dict,
-    Generic,
-    List,
-    Optional,
-    Set,
-    Type,
-    TypeVar,
-    Union,
-    cast,
-    overload,
-)
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, TypeVar, Union
 from urllib.parse import urljoin
 
-import orjson
 import uvloop
 from httpx import AsyncClient, Limits, Response, Timeout, TransportError
 from pydantic import BaseModel, Field, TypeAdapter
 
-from .exceptions import (
-    MiddlewareError,
-    RateLimitError,
-    RequestError,
-    ResponseError,
-    SecurityError,
-    SessionError,
-)
-from .utils import deserialize_json, log_request, log_response, serialize_json
+from .exceptions import MiddlewareError, RequestError, ResponseError, SecurityError
+from .utils import log_request, log_response
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 logger = logging.getLogger("enhanced_httpx")
@@ -134,7 +111,7 @@ class RequestModel(BaseModel):
     cookies: Optional[Dict[str, str]] = Field(default_factory=dict)
     params: Optional[Dict[str, Any]] = Field(default_factory=dict)
     body: Optional[Any] = None
-    json: Optional[Dict[str, Any]] = None
+    json_data: Optional[Dict[str, Any]] = None
     timeout: Optional[float] = None
     follow_redirects: bool = True
     verify_ssl: bool = True
@@ -143,7 +120,7 @@ class RequestModel(BaseModel):
 class CertificatePinner:
     """Certificate pinning for enhanced security against MITM attacks."""
 
-    def __init__(self, pins: Dict[str, List[str]] = None):
+    def __init__(self, pins: Dict[str, List[str]] | None = None):
         """
         Initialize a certificate pinner.
 
@@ -168,7 +145,7 @@ class CertificatePinner:
         if pin not in self.pins[hostname]:
             self.pins[hostname].append(pin)
 
-    def remove_pin(self, hostname: str, pin: str = None):
+    def remove_pin(self, hostname: str, pin: str | None = None):
         """
         Remove certificate pins for a hostname.
 
@@ -228,8 +205,8 @@ class EnhancedClient:
     def __init__(
         self,
         base_url: str = "",
-        headers: Dict[str, str] = None,
-        cookies: Dict[str, str] = None,
+        headers: Dict[str, str] | None = None,
+        cookies: Dict[str, str] | None = None,
         timeout: float = 30.0,
         max_connections: int = 100,
         max_keepalive_connections: int = 20,
@@ -245,7 +222,7 @@ class EnhancedClient:
         cache_ttl: int = 300,  # Default cache TTL in seconds
         rate_limit: Optional[float] = None,  # Requests per second
         rate_limit_max_tokens: int = 60,  # Maximum rate limit tokens
-        certificate_pins: Dict[str, List[str]] = None,  # Certificate pinning configuration
+        certificate_pins: Dict[str, List[str]] | None = None,  # Certificate pinning configuration
     ):
         """
         Initialize the EnhancedClient with custom configuration.
@@ -339,8 +316,9 @@ class EnhancedClient:
 
         if enable_http3:
             try:
+                # TODO: Check if httpx_h3 is installed
                 # Import HTTP/3 support if available
-                from httpx_h3 import H3Transport
+                from httpx_h3 import H3Transport  # type: ignore[import]
 
                 client_kwargs["transport"] = H3Transport()
                 logger.debug("HTTP/3 (QUIC) support enabled")
@@ -400,8 +378,13 @@ class EnhancedClient:
             return None
 
         self.metrics["cache_hits"] += 1
-        # Return a copy of the cached response
-        return cache_entry.response.copy()
+        # Create a new Response object with the same data
+        return Response(
+            status_code=cache_entry.response.status_code,
+            headers=cache_entry.response.headers,
+            content=cache_entry.response.content,
+            request=cache_entry.response.request,
+        )
 
     def _store_in_cache(
         self, cache_key: str, response: Response, ttl: Optional[int] = None
@@ -418,8 +401,16 @@ class EnhancedClient:
         ttl = ttl if ttl is not None else self.cache_ttl
         expires_at = time.time() + ttl
 
+        # copy the response to avoid modifying the original
+        copied_response = Response(
+            status_code=response.status_code,
+            headers=response.headers,
+            content=response.content,
+            request=response.request,
+        )
+
         # Create a copy of the response before caching
-        self.cache[cache_key] = CacheEntry(response.copy(), expires_at)
+        self.cache[cache_key] = CacheEntry(copied_response, expires_at)
         self.metrics["cache_misses"] += 1
 
     def add_request_middleware(self, middleware: RequestMiddleware) -> None:
@@ -469,20 +460,20 @@ class EnhancedClient:
         method: str,
         url: str,
         *,
-        headers: Dict[str, str] = None,
-        cookies: Dict[str, str] = None,
-        params: Dict[str, Any] = None,
-        json: Dict[str, Any] = None,
-        data: Any = None,
-        files: Dict[str, Any] = None,
-        timeout: float = None,
-        follow_redirects: bool = None,
-        verify_ssl: bool = None,
-        response_model: Type[T] = None,
+        headers: Dict[str, str] | None = None,
+        cookies: Dict[str, str] | None = None,
+        params: Dict[str, Any] | None = None,
+        json: Dict[str, Any] | None = None,
+        data: Any | None = None,
+        files: Dict[str, Any] | None = None,
+        timeout: float | None = None,
+        follow_redirects: bool | None = None,
+        verify_ssl: bool | None = None,
+        response_model: Type[T] | None = None,
         stream: bool = False,
-        cache: bool = None,
-        cache_ttl: int = None,
-    ) -> Union[Response, T]:
+        cache: bool | None = None,
+        cache_ttl: int | None = None,
+    ) -> Union[Response, T, None]:
         """
         Send an HTTP request with retry logic and proper error handling.
 
@@ -550,7 +541,8 @@ class EnhancedClient:
             "verify": _verify_ssl,
         }
 
-        # Check if we can use a cached response
+        # Generate cache key if the request is cacheable
+        cache_key = None
         if cacheable:
             cache_key = self._get_cache_key(method, full_url, **kwargs)
             cached_response = await self._get_from_cache(cache_key)
@@ -570,8 +562,9 @@ class EnhancedClient:
                         return adapter.validate_python(json_data)
                     except Exception as e:
                         raise ResponseError(
-                            f"Failed to parse cached response into model {response_model.__name__}: {str(e)}"
-                        )
+                            "Failed to parse cached response into model "
+                            f"{response_model.__name__}: {str(e)}"
+                        ) from e
 
                 return cached_response
 
@@ -580,7 +573,6 @@ class EnhancedClient:
 
         # Initialize retry counter
         retry_count = 0
-        last_exception = None
 
         # Retry loop
         while retry_count <= self.max_retries:
@@ -602,9 +594,9 @@ class EnhancedClient:
 
                 # Check if the response indicates an error
                 response.raise_for_status()
-
                 # Store in cache if cacheable and not streaming
-                if cacheable and not stream:
+                if cacheable and not stream and cache_key is not None:
+                    self._store_in_cache(cache_key, response, cache_ttl)
                     self._store_in_cache(cache_key, response, cache_ttl)
 
                 # Parse to response model if one was provided
@@ -616,7 +608,8 @@ class EnhancedClient:
                         return adapter.validate_python(json_data)
                     except Exception as e:
                         raise ResponseError(
-                            f"Failed to parse response into model {response_model.__name__}: {str(e)}"
+                            "Failed to parse response into model"
+                            f"{response_model.__name__}: {str(e)}"
                         ) from e
 
                 # Update metrics
@@ -625,26 +618,28 @@ class EnhancedClient:
 
             except TransportError as e:
                 # Network-related errors are retryable
-                last_exception = e
                 retry_count += 1
                 self.metrics["retry_attempts"] += 1
                 if retry_count <= self.max_retries:
                     # Exponential backoff
                     wait_time = self.retry_backoff * (2 ** (retry_count - 1))
                     logger.debug(
-                        f"Request failed with error: {str(e)}. Retrying in {wait_time:.2f} seconds..."
+                        "Request failed with error: "
+                        f"{str(e)}. Retrying in {wait_time:.2f} seconds..."
                     )
                     await asyncio.sleep(wait_time)
                 else:
                     self.metrics["request_errors"] += 1
-                    raise RequestError(f"Request failed after {self.max_retries} retries: {str(e)}")
+                    raise RequestError(
+                        f"Request failed after {self.max_retries} retries: {str(e)}"
+                    ) from e
 
             except Exception as e:
                 # Other exceptions are not retried
                 self.metrics["request_errors"] += 1
                 if isinstance(e, ResponseError) or isinstance(e, MiddlewareError):
                     raise
-                raise RequestError(f"Request failed: {str(e)}")
+                raise RequestError(f"Request failed: {str(e)}") from e
 
     # Convenience methods for common HTTP methods
     async def get(self, url: str, **kwargs) -> Union[Response, Any]:
@@ -675,7 +670,7 @@ class EnhancedClient:
         """Send an OPTIONS request."""
         return await self.request("OPTIONS", url, **kwargs)
 
-    async def stream(self, method: str, url: str, **kwargs) -> Response:
+    async def stream(self, method: str, url: str, **kwargs) -> Response | None:
         """
         Send a request and return a streaming response for handling large files.
 
@@ -699,17 +694,20 @@ class EnhancedClient:
             chunk_size: Size of chunks to download at a time
             **kwargs: Additional arguments to pass to the request method
         """
-        import os
 
-        async with self.stream("GET", url, **kwargs) as response:
-            # Ensure the directory exists
-            os.makedirs(os.path.dirname(os.path.abspath(file_path)), exist_ok=True)
+        # Get the streaming response
+        response = await self.stream("GET", url, **kwargs)
+        if response is None:
+            raise RequestError(f"Failed to download file: {url}")
 
-            # Open the file for writing
-            with open(file_path, "wb") as f:
-                # Download the file in chunks
-                async for chunk in response.aiter_bytes(chunk_size):
-                    f.write(chunk)
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(os.path.abspath(file_path)), exist_ok=True)
+
+        # Open the file for writing
+        with open(file_path, "wb") as f:
+            # Download the file in chunks
+            async for chunk in response.aiter_bytes(chunk_size):
+                f.write(chunk)
 
     async def close(self):
         """Close the client session."""
@@ -784,14 +782,16 @@ class EnhancedClient:
             requests: List of request specifications, each containing at minimum 'method' and 'url',
                      and optionally other request parameters
             max_concurrency: Maximum number of concurrent requests
-            raise_exceptions: Whether to raise the first exception encountered or return them as results
-            progress_callback: Optional callback function that receives (completed, total) as arguments
+            raise_exceptions:
+                Whether to raise the first exception encountered or return them as results
+            progress_callback:
+                Optional callback function that receives (completed, total) as arguments
 
         Returns:
             List of responses or exceptions in the same order as the requests
         """
         semaphore = asyncio.Semaphore(max_concurrency)
-        results: List[None | Response | Exception] = [None] * len(requests)
+        results: List[Optional[Union[Response, Exception]]] = [None] * len(requests)
         tasks = []
         completed = 0
         total = len(requests)
@@ -838,7 +838,8 @@ class EnhancedClient:
             response_model: Pydantic model to parse responses into
             max_concurrency: Maximum number of concurrent requests
             raise_exceptions: Whether to raise exceptions or return them as results
-            progress_callback: Optional callback function that receives (completed, total) as arguments
+            progress_callback:
+                Optional callback function that receives (completed, total) as arguments
 
         Returns:
             List of parsed model instances or exceptions
@@ -862,7 +863,8 @@ class EnhancedClient:
                 except Exception as e:
                     if raise_exceptions:
                         raise ResponseError(
-                            f"Failed to parse response into model {response_model.__name__}: {str(e)}"
+                            "Failed to parse response into model "
+                            f"{response_model.__name__}: {str(e)}"
                         ) from e
                     results.append(e)
 
@@ -889,9 +891,9 @@ class EnhancedClient:
         self,
         requests: List[Dict[str, Any]],
         concurrency_limit: int = 10,
-        response_model: Type[T] = None,
+        response_model: Type[T] | None = None,
         raise_exceptions: bool = False,
-    ) -> List[Union[T, Response, Exception]]:
+    ) -> List[Union[T, Response, Exception, None]]:
         """
         Execute multiple requests in parallel with concurrency control.
 
@@ -906,7 +908,7 @@ class EnhancedClient:
             List of responses or exceptions in the same order as the requests
         """
         semaphore = asyncio.Semaphore(concurrency_limit)
-        results = [None] * len(requests)
+        results: List[Optional[Union[T, Response, Exception]]] = [None] * len(requests)
 
         async def _process_request(index: int, req_config: Dict[str, Any]):
             async with semaphore:
@@ -926,11 +928,31 @@ class EnhancedClient:
 
         # Execute all requests with concurrency control
         await asyncio.gather(*tasks)
+
+        # apply response model if provided
+        if response_model:
+            adapter = TypeAdapter(response_model)
+            for i, result in enumerate(results):
+                if isinstance(result, Response):
+                    try:
+                        json_data = result.json()
+                        results[i] = adapter.validate_python(json_data)
+                    except Exception as e:
+                        if raise_exceptions:
+                            raise ResponseError(
+                                f"Failed to parse response into model {response_model.__name__}: "
+                                f"{str(e)}"
+                            ) from e
+                        results[i] = e
         return results
 
     async def batch_get(
-        self, urls: List[str], concurrency_limit: int = 10, response_model: Type[T] = None, **kwargs
-    ) -> List[Union[T, Response, Exception]]:
+        self,
+        urls: List[str],
+        concurrency_limit: int = 10,
+        response_model: Type[T] | None = None,
+        **kwargs,
+    ) -> List[Union[T, Response, Exception, None]]:
         """
         Execute multiple GET requests in parallel.
 

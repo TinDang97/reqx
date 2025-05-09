@@ -10,14 +10,12 @@ import json
 import logging
 import os
 import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union
-from urllib.parse import urljoin
+from typing import Any, Dict, TypeVar
 
 import httpx
 
 from .client import EnhancedClient
-from .exceptions import AuthenticationError, SessionError
+from .exceptions import AuthenticationError
 
 logger = logging.getLogger("enhanced_httpx.session")
 
@@ -35,11 +33,11 @@ class Session:
     def __init__(
         self,
         base_url: str = "",
-        headers: Dict[str, str] = None,
-        cookies: Dict[str, str] = None,
-        auth: Dict[str, Any] = None,
+        headers: Dict[str, str] | None = None,
+        cookies: Dict[str, str] | None = None,
+        auth: Dict[str, Any] | None = None,
         persist: bool = False,
-        session_file: str = None,
+        session_file: str | None = None,
         **client_kwargs,
     ):
         """
@@ -58,7 +56,8 @@ class Session:
             - Basic auth: {"type": "basic", "username": "user", "password": "pass"}
             - Bearer token: {"type": "bearer", "token": "your-token"}
             - API key: {"type": "apikey", "key": "X-API-Key", "value": "your-key"}
-            - OAuth2: {"type": "oauth2", "token_url": "url", "client_id": "id", "client_secret": "secret"}
+            - OAuth2:
+                {"type": "oauth2", "token_url": "url", "client_id": "id", "client_secret": "secret"}
         """
         self.base_url = base_url
         self.headers = headers or {}
@@ -88,7 +87,19 @@ class Session:
 
         # Apply authentication if configured
         if self.auth_config:
-            self._setup_authentication()
+            # Setup authentication but don't await it yet
+            self._setup_auth_flag = True
+
+    def _setup_authentication(self):
+        """Set up authentication based on the current configuration."""
+        import asyncio
+
+        # Create a new event loop for running the authentication
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(self.authenticate())
+        finally:
+            loop.close()
 
     async def __aenter__(self):
         """Support for async context manager."""
@@ -139,7 +150,7 @@ class Session:
 
             self.client.default_headers["Authorization"] = httpx.BasicAuth(
                 username, password
-            ).auth_header_value
+            )._auth_header
             self.authenticated = True
 
         elif auth_type == "bearer":
@@ -306,7 +317,7 @@ class Session:
 
         except Exception as e:
             self.authenticated = False
-            raise AuthenticationError(f"OAuth2 authentication failed: {str(e)}")
+            raise AuthenticationError(f"OAuth2 authentication failed: {str(e)}") from e
 
     def _create_api_key_middleware(self, key: str, value: str):
         """Create a middleware that adds API key to query params."""
@@ -324,7 +335,7 @@ class Session:
 
     def _load_session(self):
         """Load session data from disk if available."""
-        if not os.path.exists(self.session_file):
+        if self.session_file is None or not os.path.exists(self.session_file):
             return
 
         try:
@@ -388,7 +399,10 @@ class Session:
             logger.debug("Authentication token expired, refreshing")
             await self.authenticate()
 
-        return await self.client.request(method, url, **kwargs)
+        response = await self.client.request(method, url, **kwargs)
+        if response is None:
+            raise ValueError(f"Request to {url} failed to return a response")
+        return response
 
     async def get(self, url: str, **kwargs) -> httpx.Response:
         """Send a GET request using the session's client."""

@@ -1,17 +1,14 @@
 # tests/conftest.py
 
-import asyncio
-import json
 import os
 import uuid
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 import orjson
 import pytest
 import respx
 from enhanced_httpx import EnhancedClient
-from enhanced_httpx.models import ResponseModel
-from httpx import URL, Response
+from httpx import Response
 
 # Set timezone for consistent test results
 os.environ["TZ"] = "UTC"

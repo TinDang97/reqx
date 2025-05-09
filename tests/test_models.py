@@ -1,6 +1,6 @@
 import pytest
 from enhanced_httpx.models import RequestModel, ResponseModel
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 
 class TestRequestModel:

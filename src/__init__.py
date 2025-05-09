@@ -1,9 +1,10 @@
 """
 Enhanced HTTPX Package
 
-This package provides an enhanced HTTP client built on top of httpx, allowing for custom HTTP requests
-with user-defined headers, cookies, and body in an asynchronous manner. It includes Pydantic models for
-request and response validation, custom exceptions, and a command-line interface for easy usage.
+This package provides an enhanced HTTP client built on top of httpx, allowing for custom HTTP
+requests with user-defined headers, cookies, and body in an asynchronous manner.
+It includes Pydantic models for request and response validation, custom exceptions,
+and a command-line interface for easy usage.
 
 Features:
 - Asynchronous HTTP requests with httpx
@@ -20,7 +21,7 @@ Features:
 __version__ = "0.1.0"
 
 # CLI entry point
-from .cli import cli as cli_app
+import cli as cli_app
 
 # Core client
 from .client import EnhancedClient
@@ -48,13 +49,7 @@ from .exceptions import (
 from .models import GenericResponse, HttpMethod, RequestModel, ResponseModel
 
 # Utils
-from .utils import (
-    deserialize_json,
-    format_curl_command,
-    select_json_path,
-    serialize_json,
-    time_request,
-)
+from .utils import deserialize_json, format_curl_command, select_json_path, serialize_json
 
 __all__ = [
     # Client
@@ -85,7 +80,6 @@ __all__ = [
     "deserialize_json",
     "select_json_path",
     "format_curl_command",
-    "time_request",
     # CLI
     "cli_app",
 ]

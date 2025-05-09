@@ -15,7 +15,6 @@ import sys
 import time
 import traceback
 import tracemalloc
-from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 
 import aiohttp
@@ -346,7 +345,7 @@ def parse_args():
         "--method",
         choices=["get", "post", "put", "delete"],
         default="get",
-        help=f"HTTP method to benchmark (default: get)",
+        help="HTTP method to benchmark (default: get)",
     )
     parser.add_argument(
         "--json-data",

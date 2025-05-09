@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from httpx import Response
 
@@ -136,7 +136,7 @@ class CircuitBreakerError(HTTPXError):
     indicating that the service is currently considered unavailable.
     """
 
-    def __init__(self, message: str, host: str = None, retry_after: float = None):
+    def __init__(self, message: str, host: str | None = None, retry_after: float | None = None):
         self.host = host
         self.retry_after = retry_after
         super().__init__(message)
@@ -153,10 +153,10 @@ class GraphQLError(HTTPXError):
     def __init__(
         self,
         message: str,
-        http_status: int = None,
-        errors: List[Dict[str, Any]] = None,
-        data: Dict[str, Any] = None,
-        response_data: Dict[str, Any] = None,
+        http_status: int | None = None,
+        errors: List[Dict[str, Any]] | None = None,
+        data: Dict[str, Any] | None = None,
+        response_data: Dict[str, Any] | None = None,
     ):
         self.http_status = http_status
         self.errors = errors or []
@@ -169,7 +169,7 @@ class HTTPStatusError(ResponseError):
     """Exception that maps HTTP status codes to specific error classes."""
 
     @classmethod
-    def from_response(cls, response: Response) -> "HTTPStatusError":
+    def from_response(cls, response: Response) -> "ResponseError":
         """Create an appropriate error instance based on the HTTP status code."""
         status_code = response.status_code
         message = f"HTTP Error {status_code}: {response.reason_phrase}"

@@ -5,7 +5,6 @@ Script to run tests with coverage and optional features.
 
 import argparse
 import os
-import platform
 import subprocess
 import sys
 

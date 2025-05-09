@@ -6,7 +6,6 @@ including support for queries, mutations, subscriptions, and handling of variabl
 """
 
 import asyncio
-import json
 import logging
 import re
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union
@@ -19,6 +18,7 @@ from .exceptions import GraphQLError
 logger = logging.getLogger("enhanced_httpx.graphql")
 
 T = TypeVar("T")
+B = TypeVar("B", bound=BaseModel)
 
 
 class GraphQLRequest(BaseModel):
@@ -44,9 +44,9 @@ class GraphQLResponse(BaseModel):
         """Raise an exception if the response contains errors."""
         if self.has_errors:
             error_message = "; ".join(
-                error.get("message", "Unknown error") for error in self.errors
+                error.get("message", "Unknown error") for error in (self.errors or [])
             )
-            raise GraphQLError(error_message, errors=self.errors, data=self.data)
+            raise GraphQLError(error_message, errors=self.errors or [], data=self.data or {})
 
 
 class GraphQLClient:
@@ -61,7 +61,7 @@ class GraphQLClient:
         self,
         endpoint: str,
         client: Optional[EnhancedClient] = None,
-        headers: Dict[str, str] = None,
+        headers: Dict[str, str] | None = None,
         **kwargs,
     ):
         """
@@ -109,13 +109,13 @@ class GraphQLClient:
     async def query(
         self,
         query: str,
-        variables: Dict[str, Any] = None,
-        operation_name: str = None,
+        variables: Optional[Dict[str, Any]] = None,
+        operation_name: Optional[str] = None,
         parse_response: bool = True,
-        response_model: Type[T] = None,
-        headers: Dict[str, str] = None,
+        response_model: Optional[Type[B]] = None,
+        headers: Optional[Dict[str, str]] = None,
         **kwargs,
-    ) -> Union[GraphQLResponse, T, Dict[str, Any]]:
+    ) -> Union[GraphQLResponse, B, Dict[str, Any]]:
         """
         Execute a GraphQL query.
 
@@ -136,7 +136,7 @@ class GraphQLClient:
         query = self._optimize_query(query)
 
         # Prepare request payload
-        payload = {
+        payload: dict[str, Any] = {
             "query": query,
         }
 
@@ -180,7 +180,9 @@ class GraphQLClient:
         # Parse into response model if provided
         if response_model is not None:
             if graphql_response.data is None:
-                raise GraphQLError("No data in GraphQL response", errors=graphql_response.errors)
+                raise GraphQLError(
+                    "No data in GraphQL response", errors=graphql_response.errors or []
+                )
             return response_model.model_validate(graphql_response.data)
 
         return graphql_response
@@ -188,13 +190,13 @@ class GraphQLClient:
     async def mutation(
         self,
         mutation: str,
-        variables: Dict[str, Any] = None,
-        operation_name: str = None,
+        variables: Dict[str, Any] | None = None,
+        operation_name: str | None = None,
         parse_response: bool = True,
-        response_model: Type[T] = None,
-        headers: Dict[str, str] = None,
+        response_model: Type[B] | None = None,
+        headers: Dict[str, str] | None = None,
         **kwargs,
-    ) -> Union[GraphQLResponse, T, Dict[str, Any]]:
+    ) -> Union[GraphQLResponse, B, Dict[str, Any]]:
         """
         Execute a GraphQL mutation.
 

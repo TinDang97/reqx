@@ -19,20 +19,14 @@ import os
 
 # Add parent directory to path for importing enhanced_httpx
 import sys
-from typing import Any, Dict, List
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src import EnhancedClient
 from src.graphql import GraphQLClient, GraphQLResponse
-from src.middleware import (
-    CircuitBreakerMiddleware,
-    CompressionMiddleware,
-    MemoryAwareMiddleware,
-    TracingMiddleware,
-)
+from src.middleware import CircuitBreakerMiddleware, MemoryAwareMiddleware, TracingMiddleware
 from src.session import Session
-from src.webhook import WebhookClient, WebhookEvent, WebhookHandler
+from src.webhook import WebhookClient, WebhookEvent
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(name)s - %(levelname)s - %(message)s")

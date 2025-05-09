@@ -9,9 +9,9 @@ import asyncio
 import os
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 # Add parent directory to path for importing enhanced_httpx
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -58,7 +58,7 @@ async def fetch_user_with_posts(client: EnhancedClient, user_id: int):
         f"https://jsonplaceholder.typicode.com/users/{user_id}", response_model=User
     )
     posts_task = client.get(
-        f"https://jsonplaceholder.typicode.com/posts", params={"userId": str(user_id)}
+        "https://jsonplaceholder.typicode.com/posts", params={"userId": str(user_id)}
     )
 
     # Wait for both requests to complete

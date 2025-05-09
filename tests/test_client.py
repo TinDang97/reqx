@@ -1,19 +1,9 @@
-import asyncio
-import json
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from unittest.mock import MagicMock, patch
 
-import orjson
 import pytest
 from enhanced_httpx import EnhancedClient
-from enhanced_httpx.exceptions import (
-    HTTPStatusError,
-    NotFoundError,
-    RequestError,
-    ResponseError,
-    ServerError,
-)
-from enhanced_httpx.models import GenericResponse, RequestModel, ResponseModel
+from enhanced_httpx.exceptions import NotFoundError, RequestError, ResponseError, ServerError
 from pydantic import BaseModel
 
 

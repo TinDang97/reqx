@@ -3,14 +3,12 @@ Data models for the enhanced-httpx library.
 """
 
 import json
-import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, Generic, List, Optional, Type, TypeVar, Union
+from typing import Any, Awaitable, Callable, Dict, Generic, List, Optional, TypeVar, Union
 
 import httpx
-from pydantic import BaseModel, Field, HttpUrl, TypeAdapter, root_validator, validator
-from pydantic.version import VERSION as PYDANTIC_VERSION
+from pydantic import BaseModel, Field, HttpUrl, validator
 
 T = TypeVar("T")
 
@@ -78,7 +76,9 @@ class RequestModel(BaseModel):
                 try:
                     json.loads(v)  # Just validate it's proper JSON
                 except json.JSONDecodeError:
-                    raise ValueError("Body string appears to be JSON but is not valid JSON")
+                    raise ValueError(
+                        "Body string appears to be JSON but is not valid JSON"
+                    ) from None
             return v
 
         # Otherwise, leave it as a dict or list
@@ -167,7 +167,9 @@ class RequestBatch(BaseModel):
         self.requests.append(request)
         return len(self.requests) - 1
 
-    async def execute(self, client: httpx.AsyncClient) -> List[httpx.Response]:
+    async def execute(
+        self, client: httpx.AsyncClient
+    ) -> List[Union[httpx.Response, BaseException]]:
         """
         Execute all requests in the batch concurrently.
 
@@ -175,7 +177,7 @@ class RequestBatch(BaseModel):
             client: HTTP client to use
 
         Returns:
-            List of responses in the same order as the requests
+            List of responses or exceptions in the same order as the requests
         """
         import asyncio
 

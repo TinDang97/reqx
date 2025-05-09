@@ -4,10 +4,9 @@ Utility functions for enhanced-httpx.
 
 import json
 import logging
-import re
 import shlex
 import time
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 from urllib.parse import urlencode
 
 import httpx
@@ -185,7 +184,7 @@ def select_json_path(data: Union[dict, list], json_path: str) -> Any:
         else:
             return None
     except Exception as e:
-        raise ValueError(f"Invalid JSONPath expression: {str(e)}")
+        raise ValueError(f"Invalid JSONPath expression: {str(e)}") from e
 
 
 def is_rate_limited(response: httpx.Response) -> bool:

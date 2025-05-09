@@ -9,11 +9,11 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Any, Awaitable, Callable, ClassVar, Dict, Optional, Union
-from urllib.parse import urljoin
+from typing import Any, Callable, Dict, Optional, Type
 
 import httpx
-from pydantic import BaseModel, Field
+from jose import jwt as jose_jwt
+from pydantic import BaseModel
 
 from .exceptions import AuthenticationError
 
@@ -135,7 +135,7 @@ class OAuth2Auth(AuthProvider):
         grant_type: str = "client_credentials",
         refresh_before_expiry: int = 60,  # seconds
         auth_request_hook: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
-        token_model: type = TokenModel,
+        token_model: Type[TokenModel] = TokenModel,
     ):
         """Initialize OAuth 2.0 authentication.
 
@@ -158,7 +158,7 @@ class OAuth2Auth(AuthProvider):
         self.auth_request_hook = auth_request_hook
         self.token_model = token_model
 
-        self._token: Optional[token_model] = None
+        self._token: Optional[TokenModel] = None
         self._token_expiry: Optional[datetime] = None
         self._lock = asyncio.Lock()
 
@@ -236,7 +236,7 @@ class OAuth2Auth(AuthProvider):
 
         except Exception as e:
             logger.error(f"Failed to fetch OAuth token: {str(e)}")
-            raise AuthenticationError(f"OAuth authentication failed: {str(e)}")
+            raise AuthenticationError(f"OAuth authentication failed: {str(e)}") from e
 
 
 class JWTAuth(AuthProvider):
@@ -267,11 +267,6 @@ class JWTAuth(AuthProvider):
             audience: JWT audience claim
             issuer: JWT issuer claim
         """
-        try:
-            import jwt
-        except ImportError:
-            raise ImportError("JWT authentication requires PyJWT. Install with 'pip install pyjwt'")
-
         self.private_key = private_key
         self.algorithm = algorithm
         self.key_id = key_id
@@ -304,8 +299,6 @@ class JWTAuth(AuthProvider):
     async def refresh(self) -> None:
         """Generate a new JWT token."""
         try:
-            import jwt
-
             # Set standard claims
             now = int(time.time())
             payload = {"iat": now, "exp": now + self.expiry, **self.claims}
@@ -322,7 +315,7 @@ class JWTAuth(AuthProvider):
                 headers["kid"] = self.key_id
 
             # Generate the token
-            self._cached_token = jwt.encode(
+            self._cached_token = jose_jwt.encode(
                 payload,
                 self.private_key,
                 algorithm=self.algorithm,
@@ -336,4 +329,4 @@ class JWTAuth(AuthProvider):
 
         except Exception as e:
             logger.error(f"Failed to generate JWT: {str(e)}")
-            raise AuthenticationError(f"JWT authentication failed: {str(e)}")
+            raise AuthenticationError(f"JWT authentication failed: {str(e)}") from e
