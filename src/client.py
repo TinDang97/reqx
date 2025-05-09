@@ -14,7 +14,10 @@ from pydantic import BaseModel, Field, TypeAdapter
 from .exceptions import MiddlewareError, RequestError, ResponseError, SecurityError
 from .utils import log_request, log_response
 
-logger = logging.getLogger("reqx")
+logger = logging.getLogger("httpx")
+# Set up logging
+logging.basicConfig(level=logging.WARNING)
+
 T = TypeVar("T")
 
 try:
@@ -46,6 +49,8 @@ class BatchRequestError(Exception):
 
 class CacheEntry:
     """Represents a cached response."""
+
+    __slots__ = ("response", "expires_at")
 
     def __init__(self, response: Response, expires_at: float):
         self.response = response
@@ -911,34 +916,59 @@ class ReqxClient:
             List of responses or exceptions in the same order as the requests
         """
         semaphore = asyncio.Semaphore(concurrency_limit)
-        results: List[Optional[Union[T, Response, Exception]]] = [None] * len(requests)
+        results = [None] * len(requests)  # Pre-allocate the results list
 
-        async def _process_request(index: int, req_config: Dict[str, Any]):
-            async with semaphore:
-                method = req_config.pop("method", "GET")
-                url = req_config.pop("url")
+        async def _process_request(index: int, req_config: dict):
+            req_method = req_config.pop("method", "GET")
+            req_url = req_config.pop("url")
 
-                try:
-                    response = await self.request(method, url, **req_config)
+            try:
+                # Use the same URL object if possible to reduce memory
+                if isinstance(req_url, str) and req_url.startswith(("http://", "https://")):
+                    full_url = req_url
+                else:
+                    full_url = self._prepare_url(req_url)
+
+                # Apply request middleware with minimal dict copying
+                kwargs = await self._apply_request_middlewares(req_method, full_url, req_config)
+
+                async with semaphore:
+                    # Acquire rate limiting tokens if needed
+                    if self.rate_limiter:
+                        await self.rate_limiter.acquire()
+
+                    # Make the actual request
+                    response = await self.client.request(method=req_method, url=full_url, **kwargs)
+
+                    # Process response middleware
+                    if self.response_middlewares:
+                        response = await self._apply_response_middlewares(response)
+
+                    # Store the response directly in the results list
                     results[index] = response
-                except Exception as e:
-                    if raise_exceptions:
-                        raise e
-                    results[index] = e
+            except Exception as e:
+                if raise_exceptions:
+                    raise e
+                results[index] = e
 
         # Create tasks for all requests
-        tasks = [_process_request(i, req) for i, req in enumerate(requests)]
+        tasks = []
+        for i, req in enumerate(requests):
+            # Make a shallow copy to avoid modifying the original
+            req_copy = {k: v for k, v in req.items()}
+            tasks.append(_process_request(i, req_copy))
 
         # Execute all requests with concurrency control
         await asyncio.gather(*tasks)
 
-        # apply response model if provided
+        # Apply response model if provided
         if response_model:
             adapter = TypeAdapter(response_model)
             for i, result in enumerate(results):
                 if isinstance(result, Response):
                     try:
                         json_data = result.json()
+                        # Replace the response with the model instance
                         results[i] = adapter.validate_python(json_data)
                     except Exception as e:
                         if raise_exceptions:
@@ -947,6 +977,7 @@ class ReqxClient:
                                 f"{str(e)}"
                             ) from e
                         results[i] = e
+
         return results
 
     async def batch_get(

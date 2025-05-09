@@ -49,6 +49,8 @@ class RequestModel(BaseModel):
     class Config:
         use_enum_values = True
         extra = "forbid"  # Prevent extra attributes
+        # Enable slots for memory optimization
+        slots = True
 
     @validator("url")
     def validate_url(cls, v):
@@ -101,6 +103,10 @@ class ResponseModel(BaseModel):
         default_factory=datetime.now, description="When the response was received"
     )
 
+    class Config:
+        # Enable slots for memory optimization
+        slots = True
+
     @validator("status_code")
     def validate_status_code(cls, v):
         """Validate HTTP status code range."""
@@ -138,6 +144,10 @@ class GenericResponse(Generic[T], BaseModel):
     meta: Optional[Dict[str, Any]] = None
     errors: Optional[List[Dict[str, Any]]] = None
 
+    class Config:
+        # Enable slots for memory optimization
+        slots = True
+
     @property
     def has_errors(self) -> bool:
         """Check if the response contains errors."""
@@ -150,6 +160,10 @@ class RequestBatch(BaseModel):
     requests: List[Dict[str, Any]] = Field(default_factory=list)
     max_connections: int = 10
     timeout: float = 30.0
+
+    class Config:
+        # Enable slots for memory optimization
+        slots = True
 
     def add_request(self, method: HttpMethod, url: str, **kwargs) -> int:
         """
@@ -205,9 +219,17 @@ class RequestHook(BaseModel):
     callback: Optional[Callable] = None
     async_callback: Optional[Callable[[str, str, Dict[str, Any]], Awaitable[Dict[str, Any]]]] = None
 
+    class Config:
+        # Enable slots for memory optimization
+        slots = True
+
 
 class ResponseHook(BaseModel):
     """Hook for response interception and modification."""
 
     callback: Optional[Callable] = None
     async_callback: Optional[Callable[[httpx.Response], Awaitable[httpx.Response]]] = None
+
+    class Config:
+        # Enable slots for memory optimization
+        slots = True
