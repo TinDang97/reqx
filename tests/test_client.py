@@ -2,8 +2,8 @@ from typing import List, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
-from enhanced_httpx import EnhancedClient
-from enhanced_httpx.exceptions import NotFoundError, RequestError, ResponseError, ServerError
+from cli import ReqxClient
+from exceptions import NotFoundError, RequestError, ResponseError, ServerError
 from pydantic import BaseModel
 
 
@@ -23,14 +23,14 @@ class UserResponse(BaseModel):
 
 @pytest.fixture
 async def client():
-    async with EnhancedClient(base_url="https://api.example.com") as client:
+    async with ReqxClient(base_url="https://api.example.com") as client:
         yield client
 
 
 @pytest.mark.asyncio
 async def test_client_initialization():
     """Test that client initializes with correct defaults."""
-    client = EnhancedClient()
+    client = ReqxClient()
 
     assert client.base_url == ""
     assert client.timeout == 30.0
@@ -44,7 +44,7 @@ async def test_client_initialization():
 @pytest.mark.asyncio
 async def test_client_custom_parameters():
     """Test that client initializes with custom parameters."""
-    client = EnhancedClient(
+    client = ReqxClient(
         base_url="https://example.com",
         timeout=10.0,
         max_connections=50,
@@ -66,7 +66,7 @@ async def test_client_custom_parameters():
 @pytest.mark.asyncio
 async def test_client_context_manager():
     """Test client as a context manager."""
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         assert client.client is not None
 
     # Client should be closed after the context manager exits
@@ -161,7 +161,7 @@ async def test_retry_on_network_error():
             ),
         ]
 
-        client = EnhancedClient(max_retries=1, retry_backoff=0.01)
+        client = ReqxClient(max_retries=1, retry_backoff=0.01)
         response = await client.get("https://example.com/api")
 
         assert mock_request.call_count == 2
@@ -177,7 +177,7 @@ async def test_max_retries_exceeded():
         # All calls raise network errors
         mock_request.side_effect = Exception("Connection error")
 
-        client = EnhancedClient(max_retries=2, retry_backoff=0.01)
+        client = ReqxClient(max_retries=2, retry_backoff=0.01)
 
         with pytest.raises(RequestError):
             await client.get("https://example.com/api")

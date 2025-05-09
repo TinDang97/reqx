@@ -5,7 +5,7 @@
 ## [Unreleased]
 
 ### Added
-- Initial implementation of the `EnhancedClient` class for custom HTTP requests.
+- Initial implementation of the `ReqxClient` class for custom HTTP requests.
 - Support for asynchronous operations using `httpx`.
 - Pydantic models for request and response validation.
 - Custom exceptions for error handling.
@@ -13,7 +13,7 @@
 - Command-line interface for making HTTP requests.
 
 ### Changed
-- Improved error handling in the `EnhancedClient` class.
+- Improved error handling in the `ReqxClient` class.
 - Enhanced logging capabilities for better debugging.
 
 ### Fixed
@@ -23,7 +23,7 @@
 ## [0.1.0] - 2023-10-01
 ### Added
 - Project structure and initial files.
-- Basic tests for `EnhancedClient` and Pydantic models.
+- Basic tests for `ReqxClient` and Pydantic models.
 - Example scripts for asynchronous requests and CLI usage.
 
 ### Changed

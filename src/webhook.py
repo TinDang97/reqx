@@ -16,9 +16,9 @@ from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from .client import EnhancedClient
+from .client import ReqxClient
 
-logger = logging.getLogger("enhanced_httpx.webhook")
+logger = logging.getLogger("reqx.webhook")
 
 
 class WebhookEvent(BaseModel):
@@ -54,7 +54,7 @@ class WebhookClient:
 
     def __init__(
         self,
-        client: Optional[EnhancedClient] = None,
+        client: Optional[ReqxClient] = None,
         default_headers: Dict[str, str] | None = None,
         signing_secret: Optional[str] = None,
         retry_attempts: int = 3,
@@ -64,13 +64,13 @@ class WebhookClient:
         Initialize a webhook client.
 
         Args:
-            client: Optional EnhancedClient instance
+            client: Optional ReqxClient instance
             default_headers: Default headers to include with webhook requests
             signing_secret: Secret used to sign webhook payloads
             retry_attempts: Number of delivery retry attempts
             retry_backoff: Backoff factor for retries
         """
-        self.client = client or EnhancedClient(
+        self.client = client or ReqxClient(
             timeout=10.0,  # Shorter timeout for webhooks
             max_retries=retry_attempts,
             retry_backoff=retry_backoff,

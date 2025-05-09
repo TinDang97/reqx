@@ -4,7 +4,7 @@ This document provides detailed API documentation for the enhanced-httpx library
 
 ## Table of Contents
 
-- [EnhancedClient](#enhancedclient)
+- [ReqxClient](#ReqxClient)
   - [Constructor](#constructor)
   - [Basic Request Methods](#basic-request-methods)
   - [Middleware Support](#middleware-support)
@@ -19,18 +19,18 @@ This document provides detailed API documentation for the enhanced-httpx library
 - [Exceptions](#exceptions)
 - [Utilities](#utilities)
 
-## EnhancedClient
+## ReqxClient
 
-The `EnhancedClient` class is the main interface for making HTTP requests.
+The `ReqxClient` class is the main interface for making HTTP requests.
 
 ```python
-from enhanced_httpx import EnhancedClient
+from reqx import ReqxClient
 ```
 
 ### Constructor
 
 ```python
-EnhancedClient(
+ReqxClient(
     base_url: str = "",
     headers: Dict[str, str] = None,
     cookies: Dict[str, str] = None,

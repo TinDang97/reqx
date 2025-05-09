@@ -4,7 +4,7 @@ from httpx import Response
 
 
 class HTTPXError(Exception):
-    """Base class for exceptions in the enhanced_httpx library."""
+    """Base class for exceptions in the reqx library."""
 
     def __init__(self, message: str):
         self.message = message

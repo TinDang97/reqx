@@ -13,7 +13,7 @@ import httpx
 import jsonpath_ng
 import orjson
 
-logger = logging.getLogger("enhanced_httpx")
+logger = logging.getLogger("reqx")
 
 
 def serialize_json(obj: Any) -> str:
@@ -275,3 +275,23 @@ def get_retry_after(response: httpx.Response) -> Optional[float]:
                 pass
 
     return None
+
+
+def sanitize_sensitive_data(data: Any) -> Any:
+    """
+    Sanitize sensitive data in a dictionary or list.
+
+    Args:
+        data: Input data (dict or list)
+    Returns:
+        Sanitized data
+    """
+    if isinstance(data, dict):
+        return {k: sanitize_sensitive_data(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_sensitive_data(item) for item in data]
+    elif isinstance(data, str):
+        # Replace sensitive information with a placeholder
+        return data.replace("sensitive", "[REDACTED]")
+    else:
+        return data

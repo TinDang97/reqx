@@ -3,7 +3,7 @@ Enhanced Session module for maintaining state across HTTP requests.
 
 This module provides a Session class that can be used to maintain cookies,
 authentication, and other state across multiple requests. It builds upon the
-EnhancedClient for making the actual requests.
+ReqxClient for making the actual requests.
 """
 
 import json
@@ -14,10 +14,10 @@ from typing import Any, Dict, TypeVar
 
 import httpx
 
-from .client import EnhancedClient
+from .client import ReqxClient
 from .exceptions import AuthenticationError
 
-logger = logging.getLogger("enhanced_httpx.session")
+logger = logging.getLogger("reqx.session")
 
 T = TypeVar("T")
 
@@ -50,7 +50,7 @@ class Session:
             auth: Authentication configuration (see below for options)
             persist: Whether to persist session data to disk
             session_file: Path to file for storing session data
-            **client_kwargs: Additional arguments to pass to EnhancedClient constructor
+            **client_kwargs: Additional arguments to pass to ReqxClient constructor
 
         Authentication options:
             - Basic auth: {"type": "basic", "username": "user", "password": "pass"}
@@ -78,7 +78,7 @@ class Session:
             self.session_file = None
 
         # Create client with session defaults
-        self.client = EnhancedClient(
+        self.client = ReqxClient(
             base_url=self.base_url,
             headers=self.headers,
             cookies=self.cookies,

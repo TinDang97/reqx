@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Example script that demonstrates how to use the enhanced_httpx CLI.
+Example script that demonstrates how to use the reqx CLI.
 This script shows various commands you can run with the CLI.
 """
 
@@ -14,7 +14,7 @@ from colorama import Fore, Style, init
 # Initialize colorama for cross-platform colored terminal text
 init()
 
-# Add parent directory to path for importing enhanced_httpx
+# Add parent directory to path for importing reqx
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
@@ -58,9 +58,9 @@ def main():
     # Example 1: Basic GET request
     print_explanation(
         "Example 1: Basic GET request to httpbin.org/get. "
-        "This shows a simple GET request with the enhanced_httpx CLI."
+        "This shows a simple GET request with the reqx CLI."
     )
-    run_command("python -m enhanced_httpx.cli get https://httpbin.org/get")
+    run_command("python -m reqx.cli get https://httpbin.org/get")
 
     # Example 2: GET with headers and parameters
     print_explanation(
@@ -68,7 +68,7 @@ def main():
         "This demonstrates how to add custom headers and query parameters to a request."
     )
     run_command(
-        "python -m enhanced_httpx.cli get https://httpbin.org/get "
+        "python -m reqx.cli get https://httpbin.org/get "
         '-H "User-Agent=EnhancedHTTPX-Demo" '
         '-H "Accept=application/json" '
         '-p "param1=value1" -p "param2=value2"'
@@ -80,7 +80,7 @@ def main():
         "This shows how to send JSON data in a POST request."
     )
     run_command(
-        "python -m enhanced_httpx.cli post https://httpbin.org/post "
+        "python -m reqx.cli post https://httpbin.org/post "
         '-j \'{"name": "Test User", "email": "test@example.com", "age": 30}\''
     )
 
@@ -90,7 +90,7 @@ def main():
         "This shows how to extract just the fields you need from a JSON response."
     )
     run_command(
-        "python -m enhanced_httpx.cli get https://httpbin.org/json "
+        "python -m reqx.cli get https://httpbin.org/json "
         '--json-path "$.slideshow.slides[*].title"'
     )
 
@@ -100,9 +100,7 @@ def main():
         "This demonstrates how to save the response body to a file."
     )
     response_file = os.path.join(os.path.dirname(__file__), "response.json")
-    run_command(
-        f'python -m enhanced_httpx.cli get https://httpbin.org/get --pretty --save "{response_file}"'
-    )
+    run_command(f'python -m reqx.cli get https://httpbin.org/get --pretty --save "{response_file}"')
     print(f"Saved response to: {response_file}")
 
     # Example 6: Generate equivalent curl command
@@ -111,7 +109,7 @@ def main():
         "This shows how to get the curl equivalent of a request, which can be useful for sharing or debugging."
     )
     run_command(
-        "python -m enhanced_httpx.cli post https://httpbin.org/post "
+        "python -m reqx.cli post https://httpbin.org/post "
         '-H "Content-Type=application/json" '
         '-H "Authorization=Bearer token123" '
         '-j \'{"data": "test"}\' '
@@ -123,9 +121,7 @@ def main():
         "Example 7: Running in debug mode. "
         "This shows how to enable debug logging for detailed request and response information."
     )
-    run_command(
-        "python -m enhanced_httpx.cli --debug get https://httpbin.org/headers " '-H "X-Debug=true"'
-    )
+    run_command("python -m reqx.cli --debug get https://httpbin.org/headers " '-H "X-Debug=true"')
 
     print(f"\n{Fore.GREEN}All examples completed!{Style.RESET_ALL}")
 

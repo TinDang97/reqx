@@ -11,9 +11,9 @@ import sys
 import time
 from typing import Any, Dict
 
-# Add parent directory to path for importing enhanced_httpx
+# Add parent directory to path for importing reqx
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src import EnhancedClient, Response
+from src import ReqxClient, Response
 
 
 async def auth_middleware(method: str, url: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
@@ -92,7 +92,7 @@ async def main():
     print("===============================\n")
 
     # Create a client
-    async with EnhancedClient(debug=True) as client:
+    async with ReqxClient(debug=True) as client:
         # Add request middlewares (executed in the order they are added)
         client.add_request_middleware(auth_middleware)
         client.add_request_middleware(timing_middleware)

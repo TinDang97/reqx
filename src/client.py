@@ -8,17 +8,22 @@ import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, TypeVar, Union
 from urllib.parse import urljoin
 
-import uvloop
 from httpx import AsyncClient, Limits, Response, Timeout, TransportError
 from pydantic import BaseModel, Field, TypeAdapter
 
 from .exceptions import MiddlewareError, RequestError, ResponseError, SecurityError
 from .utils import log_request, log_response
 
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-logger = logging.getLogger("enhanced_httpx")
-
+logger = logging.getLogger("reqx")
 T = TypeVar("T")
+
+try:
+    import uvloop
+
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+except ImportError:
+    logger.warning("uvloop not installed. Using default asyncio event loop.")
+
 
 # Define middleware types
 RequestMiddleware = Callable[[str, str, Dict[str, Any]], Awaitable[Dict[str, Any]]]

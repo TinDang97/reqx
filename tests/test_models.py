@@ -1,5 +1,5 @@
 import pytest
-from enhanced_httpx.models import RequestModel, ResponseModel
+from models import RequestModel, ResponseModel
 from pydantic import ValidationError
 
 

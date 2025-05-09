@@ -2,10 +2,9 @@ import json
 from datetime import datetime
 
 import pytest
-from enhanced_httpx.utils import (
+from utils import (
     deserialize_json,
     format_curl_command,
-    sanitize_sensitive_data,
     select_json_path,
     serialize_json,
 )

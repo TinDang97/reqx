@@ -17,12 +17,12 @@ import json
 import logging
 import os
 
-# Add parent directory to path for importing enhanced_httpx
+# Add parent directory to path for importing reqx
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src import EnhancedClient
+from src import ReqxClient
 from src.graphql import GraphQLClient, GraphQLResponse
 from src.middleware import CircuitBreakerMiddleware, MemoryAwareMiddleware, TracingMiddleware
 from src.session import Session
@@ -38,7 +38,7 @@ async def demo_certificate_pinning():
     logger.info("===== Certificate Pinning Demo =====")
 
     # Create a client with certificate pinning
-    async with EnhancedClient(
+    async with ReqxClient(
         verify_ssl=True,
         certificate_pins={
             "httpbin.org": [
@@ -68,7 +68,7 @@ async def demo_circuit_breaker():
         error_codes=[500, 502, 503, 504],  # Server errors
     )
 
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         # Add the circuit breaker middleware
         client._middleware_chain.add(circuit_breaker)
 
@@ -112,7 +112,7 @@ async def demo_memory_aware_streaming():
         check_content_length=True,
     )
 
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         # Add memory-aware middleware
         client._middleware_chain.add(memory_middleware)
 
@@ -150,7 +150,7 @@ async def demo_tracing_middleware():
         trace_all_headers=True,
     )
 
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         # Add tracing middleware
         client._middleware_chain.add(tracing_middleware)
 

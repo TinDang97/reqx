@@ -12,10 +12,10 @@ from typing import Any, Dict, List, Optional, Type, TypeVar, Union
 
 from pydantic import BaseModel
 
-from .client import EnhancedClient
+from .client import ReqxClient
 from .exceptions import GraphQLError
 
-logger = logging.getLogger("enhanced_httpx.graphql")
+logger = logging.getLogger("reqx.graphql")
 
 T = TypeVar("T")
 B = TypeVar("B", bound=BaseModel)
@@ -53,14 +53,14 @@ class GraphQLClient:
     """
     A client for interacting with GraphQL APIs.
 
-    This class is built on top of EnhancedClient and provides specialized
+    This class is built on top of ReqxClient and provides specialized
     methods for working with GraphQL APIs.
     """
 
     def __init__(
         self,
         endpoint: str,
-        client: Optional[EnhancedClient] = None,
+        client: Optional[ReqxClient] = None,
         headers: Dict[str, str] | None = None,
         **kwargs,
     ):
@@ -69,9 +69,9 @@ class GraphQLClient:
 
         Args:
             endpoint: The GraphQL endpoint URL
-            client: An optional EnhancedClient instance to use
+            client: An optional ReqxClient instance to use
             headers: Default headers to include with all GraphQL requests
-            **kwargs: Additional arguments to pass to EnhancedClient constructor
+            **kwargs: Additional arguments to pass to ReqxClient constructor
         """
         self.endpoint = endpoint
 
@@ -79,7 +79,7 @@ class GraphQLClient:
         if client is not None:
             self.client = client
         else:
-            self.client = EnhancedClient(**kwargs)
+            self.client = ReqxClient(**kwargs)
 
         # Set default headers for GraphQL
         self.headers = {

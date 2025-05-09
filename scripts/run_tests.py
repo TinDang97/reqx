@@ -41,7 +41,7 @@ def run_tests(args):
 
     # Add coverage if requested
     if args.coverage:
-        cmd.extend(["--cov=enhanced_httpx", "--cov-report=term", "--cov-config=.coveragerc"])
+        cmd.extend(["--cov=reqx", "--cov-report=term", "--cov-config=.coveragerc"])
 
         if args.html:
             cmd.append("--cov-report=html")

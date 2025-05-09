@@ -1,6 +1,6 @@
 import pytest
 from click.testing import CliRunner
-from enhanced_httpx.cli import cli
+import cli
 
 
 @pytest.fixture

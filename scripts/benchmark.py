@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Benchmark script to compare performance of enhanced_httpx with standard httpx
+Benchmark script to compare performance of reqx with standard httpx
 and other HTTP client libraries.
 """
 
@@ -22,9 +22,9 @@ import httpx
 import uvloop
 from tabulate import tabulate
 
-# Add parent directory to path for importing enhanced_httpx
+# Add parent directory to path for importing reqx
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src import EnhancedClient
+from src import ReqxClient
 
 # Enable uvloop for enhanced performance
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -58,15 +58,15 @@ class BenchmarkResult:
         }
 
 
-async def benchmark_enhanced_httpx(
+async def benchmark_reqx(
     url, total_requests, method="get", headers=None, params=None, json_data=None
 ):
-    """Benchmark the enhanced_httpx client."""
+    """Benchmark the reqx client."""
     # Start memory tracking
     gc.collect()
     tracemalloc.start()
 
-    async with EnhancedClient() as client:
+    async with ReqxClient() as client:
         start = time.time()
         tasks = []
         for _ in range(total_requests):
@@ -82,7 +82,7 @@ async def benchmark_enhanced_httpx(
         try:
             await asyncio.gather(*tasks)
         except Exception as e:
-            print(f"Error during enhanced_httpx benchmark: {str(e)}")
+            print(f"Error during reqx benchmark: {str(e)}")
 
         end = time.time()
         duration = end - start
@@ -92,7 +92,7 @@ async def benchmark_enhanced_httpx(
     tracemalloc.stop()
 
     return BenchmarkResult(
-        name="enhanced_httpx",
+        name="reqx",
         requests=total_requests,
         duration=duration,
         req_per_sec=total_requests / duration,
@@ -192,8 +192,8 @@ async def benchmark_aiohttp(
 
 async def run_single_benchmark(client_type, url, requests, method, headers, params, json_data):
     """Run a single benchmark for a specific client."""
-    if client_type == "enhanced_httpx":
-        return await benchmark_enhanced_httpx(url, requests, method, headers, params, json_data)
+    if client_type == "reqx":
+        return await benchmark_reqx(url, requests, method, headers, params, json_data)
     elif client_type == "httpx":
         return await benchmark_httpx(url, requests, method, headers, params, json_data)
     elif client_type == "aiohttp":
@@ -337,8 +337,8 @@ def parse_args():
     parser.add_argument(
         "--clients",
         nargs="+",
-        choices=["enhanced_httpx", "httpx", "aiohttp"],
-        default=["enhanced_httpx", "httpx", "aiohttp"],
+        choices=["reqx", "httpx", "aiohttp"],
+        default=["reqx", "httpx", "aiohttp"],
         help="HTTP clients to benchmark",
     )
     parser.add_argument(

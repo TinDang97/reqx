@@ -53,7 +53,7 @@ We use `pytest` for testing. To run the tests:
 pytest
 
 # Run tests with coverage
-pytest --cov=enhanced_httpx
+pytest --cov=reqx
 
 # Run a specific test file
 pytest tests/test_client.py

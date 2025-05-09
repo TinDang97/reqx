@@ -15,7 +15,7 @@ import httpx
 
 from .exceptions import MiddlewareError
 
-logger = logging.getLogger("enhanced_httpx.middleware")
+logger = logging.getLogger("reqx.middleware")
 
 # Type aliases for request and response handlers
 RequestHandler = Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]
@@ -318,7 +318,7 @@ class RetryMiddleware(Middleware):
             await asyncio.sleep(sleep_time)
 
             # The client will resend the request with updated _retry_count
-            # This is handled by the EnhancedClient._send_with_middlewares method
+            # This is handled by the ReqxClient._send_with_middlewares method
             raise httpx.TransportError(f"Retry needed (status={response.status_code})")
 
         return response

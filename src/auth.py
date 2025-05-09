@@ -1,4 +1,4 @@
-"""Authentication providers for EnhancedClient.
+"""Authentication providers for ReqxClient.
 
 This module provides a structured approach to API authentication with various
 authentication schemes including OAuth, JWT, API keys, and more.
@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from .exceptions import AuthenticationError
 
-logger = logging.getLogger("enhanced_httpx.auth")
+logger = logging.getLogger("reqx.auth")
 
 
 class AuthProvider(ABC):

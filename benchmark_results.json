@@ -1,6 +1,6 @@
 [
   {
-    "client": "enhanced_httpx",
+    "client": "reqx",
     "requests": 100,
     "duration_seconds": 0.004,
     "requests_per_second": 24736.71,
