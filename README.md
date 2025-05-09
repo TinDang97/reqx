@@ -38,6 +38,21 @@ Or using pip:
 pip install enhanced-httpx
 ```
 
+### Optional Dependencies
+
+To install with optional features:
+
+```bash
+# For Brotli compression support
+pip install enhanced-httpx[compression]
+
+# For development tools
+pip install enhanced-httpx[dev]
+
+# For multiple extras
+pip install enhanced-httpx[compression,dev]
+```
+
 ## Quick Start
 
 ### Basic Usage
@@ -86,7 +101,7 @@ async def main():
             "https://jsonplaceholder.typicode.com/users/1",
             response_model=User
         )
-        
+
         print(f"User: {user.name} ({user.email})")
 
 if __name__ == "__main__":
@@ -105,11 +120,11 @@ async def main():
     async with EnhancedClient() as client:
         response = await client.get("https://jsonplaceholder.typicode.com/users")
         data = response.json()
-        
+
         # Extract all user emails
         emails = select_json_path(data, "$[*].email")
         print("User emails:", emails)
-        
+
         # Extract nested data
         companies = select_json_path(data, "$[*].company.name")
         print("Company names:", companies)
@@ -136,13 +151,13 @@ async def main():
             await client.get("https://httpbin.org/status/404")
         except NotFoundError as e:
             print(f"Resource not found: {e}")
-        
+
         try:
             # This will raise a ServerError
             await client.get("https://httpbin.org/status/500")
         except ServerError as e:
             print(f"Server error: {e}")
-            
+
         try:
             # This will likely raise a TimeoutError
             await client.get(
@@ -183,6 +198,46 @@ client = EnhancedClient(
 )
 ```
 
+### Request Compression
+
+Enhanced HTTPX supports request compression using various algorithms. For Brotli compression, install the optional dependency:
+
+```bash
+pip install enhanced-httpx[compression]
+```
+
+Then use the CompressionMiddleware:
+
+```python
+import asyncio
+from enhanced_httpx import EnhancedClient
+from enhanced_httpx.middleware import CompressionMiddleware, MiddlewareChain
+
+async def main():
+    # Create middleware chain with compression
+    middleware = MiddlewareChain()
+    middleware.add(CompressionMiddleware(
+        compress_requests=True,
+        min_size_to_compress=1024,  # Only compress bodies larger than 1KB
+        compress_type="br",  # Use Brotli compression
+        accept_compressed_responses=True
+    ))
+
+    # Create client with middleware
+    async with EnhancedClient() as client:
+        client.middleware = middleware
+
+        # The request body will be automatically compressed
+        response = await client.post(
+            "https://httpbin.org/post",
+            json={"large": "data" * 1000}  # Large enough to trigger compression
+        )
+        print(response.json())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
 ### Using Middleware
 
 You can add middleware functions to modify requests before they are sent or responses before they are returned:
@@ -209,7 +264,7 @@ async def main():
         # Add middleware
         client.add_request_middleware(add_auth_header)
         client.add_response_middleware(log_response_time)
-        
+
         # Make a request - middleware will be applied
         response = await client.get("https://httpbin.org/get")
         print(response.json())
@@ -230,15 +285,15 @@ async def main():
     async with EnhancedClient() as client:
         # Create a batch of requests
         batch = client.create_batch()
-        
+
         # Add requests to the batch
         batch.add_request("GET", "https://httpbin.org/get")
         batch.add_request("POST", "https://httpbin.org/post", json={"name": "John"})
         batch.add_request("GET", "https://httpbin.org/delay/1")
-        
+
         # Execute all requests concurrently (with max_connections limit)
         responses = await client.execute_batch(batch, max_connections=5)
-        
+
         # Process responses
         for i, response in enumerate(responses):
             print(f"Response {i+1} status: {response.status_code}")
@@ -261,11 +316,11 @@ async def main():
         # First request will be sent to server
         response1 = await client.get("https://httpbin.org/get")
         print("First request:", response1.elapsed.total_seconds())
-        
+
         # Second request will use cached response (much faster)
         response2 = await client.get("https://httpbin.org/get")
         print("Second request (cached):", response2.elapsed.total_seconds())
-        
+
         # Force refresh cache for this request
         response3 = await client.get("https://httpbin.org/get", force_refresh=True)
         print("Third request (forced refresh):", response3.elapsed.total_seconds())

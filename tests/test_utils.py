@@ -1,14 +1,14 @@
-import pytest
 import json
-import orjson
 from datetime import datetime
 
+import orjson
+import pytest
 from enhanced_httpx.utils import (
-    serialize_json,
     deserialize_json,
-    select_json_path,
-    sanitize_sensitive_data,
     format_curl_command,
+    sanitize_sensitive_data,
+    select_json_path,
+    serialize_json,
 )
 
 # Sample nested JSON for testing JSON path

@@ -2,12 +2,13 @@
 Configuration management for enhanced-httpx.
 """
 
-import os
 import json
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple, Union
-from pydantic import BaseModel, Field
+import os
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+from pydantic import BaseModel, Field
 
 # Default configuration file path
 DEFAULT_CONFIG_DIR = os.path.expanduser("~/.config/enhanced-httpx")

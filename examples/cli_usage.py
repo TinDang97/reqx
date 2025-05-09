@@ -8,7 +8,8 @@ import os
 import subprocess
 import sys
 import textwrap
-from colorama import init, Fore, Style
+
+from colorama import Fore, Style, init
 
 # Initialize colorama for cross-platform colored terminal text
 init()

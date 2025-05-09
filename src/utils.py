@@ -4,14 +4,15 @@ Utility functions for enhanced-httpx.
 
 import json
 import logging
-import shlex
-import orjson
-import time
 import re
-from typing import Any, Dict, Optional, Union, List, Tuple
+import shlex
+import time
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlencode
-import jsonpath_ng
+
 import httpx
+import jsonpath_ng
+import orjson
 
 logger = logging.getLogger("enhanced_httpx")
 

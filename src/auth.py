@@ -4,12 +4,12 @@ This module provides a structured approach to API authentication with various
 authentication schemes including OAuth, JWT, API keys, and more.
 """
 
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, Callable, Awaitable, Union, ClassVar
-import time
 import asyncio
 import logging
+import time
+from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
+from typing import Any, Awaitable, Callable, ClassVar, Dict, Optional, Union
 from urllib.parse import urljoin
 
 import httpx

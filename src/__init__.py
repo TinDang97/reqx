@@ -19,47 +19,42 @@ Features:
 
 __version__ = "0.1.0"
 
+# CLI entry point
+from .cli import cli as cli_app
+
 # Core client
 from .client import EnhancedClient
 
-# Models
-from .models import (
-    HttpMethod,
-    RequestModel,
-    ResponseModel,
-    GenericResponse,
-)
-
 # Exceptions
 from .exceptions import (
+    AuthenticationError,
+    ClientError,
+    ConfigurationError,
+    ForbiddenError,
+    HTTPStatusError,
     HTTPXError,
+    NetworkError,
+    NotFoundError,
     RequestError,
     ResponseError,
-    NetworkError,
-    TimeoutError,
-    SSLError,
-    ClientError,
     ServerError,
-    ValidationError,
-    AuthenticationError,
-    ForbiddenError,
-    NotFoundError,
     SessionError,
-    ConfigurationError,
-    HTTPStatusError,
+    SSLError,
+    TimeoutError,
+    ValidationError,
 )
+
+# Models
+from .models import GenericResponse, HttpMethod, RequestModel, ResponseModel
 
 # Utils
 from .utils import (
-    serialize_json,
     deserialize_json,
-    select_json_path,
     format_curl_command,
+    select_json_path,
+    serialize_json,
     time_request,
 )
-
-# CLI entry point
-from .cli import cli as cli_app
 
 __all__ = [
     # Client

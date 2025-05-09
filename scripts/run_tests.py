@@ -3,11 +3,11 @@
 Script to run tests with coverage and optional features.
 """
 
-import os
-import sys
 import argparse
-import subprocess
+import os
 import platform
+import subprocess
+import sys
 
 # Configure paths
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -74,9 +74,9 @@ def ensure_test_requirements():
     print("Checking test dependencies...")
 
     try:
+        import httpx
         import pytest
         import pytest_cov
-        import httpx
         import respx
 
         print("All required test dependencies are installed.")

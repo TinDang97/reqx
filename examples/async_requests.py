@@ -6,15 +6,16 @@ request retries, and JSON path extraction.
 """
 
 import asyncio
-import sys
 import os
+import sys
 import time
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
 
 # Add parent directory to path for importing enhanced_httpx
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src.enhanced_httpx import EnhancedClient, select_json_path
+from src import EnhancedClient, select_json_path
 
 
 # Define Pydantic models for API responses

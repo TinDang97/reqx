@@ -94,7 +94,7 @@ async def get(
 ) -> Union[Response, T]:
     """
     Send an HTTP GET request.
-    
+
     Args:
         url: URL to request
         params: Query parameters to append to the URL
@@ -104,7 +104,7 @@ async def get(
         timeout: Request timeout in seconds
         response_model: Optional Pydantic model to parse the response into
         force_refresh: Whether to ignore cache and force a fresh request
-        
+
     Returns:
         Response object or parsed model instance if response_model is provided
     """
@@ -128,7 +128,7 @@ async def post(
 ) -> Union[Response, T]:
     """
     Send an HTTP POST request.
-    
+
     Args:
         url: URL to request
         data: Form data or request body
@@ -139,7 +139,7 @@ async def post(
         follow_redirects: Whether to follow redirects
         timeout: Request timeout in seconds
         response_model: Optional Pydantic model to parse the response into
-        
+
     Returns:
         Response object or parsed model instance if response_model is provided
     """
@@ -158,12 +158,12 @@ async def request(
 ) -> Response:
     """
     Send an HTTP request with the given method.
-    
+
     Args:
         method: HTTP method (GET, POST, etc.)
         url: URL to request
         **kwargs: Additional arguments to pass to httpx.request
-        
+
     Returns:
         Response object
     """
@@ -175,7 +175,7 @@ async def request(
 def add_request_middleware(self, middleware: RequestMiddleware) -> None:
     """
     Add a middleware function that will be called before each request.
-    
+
     Args:
         middleware: A function that takes (method, url, request_kwargs) and returns modified request_kwargs
     """
@@ -185,7 +185,7 @@ def add_request_middleware(self, middleware: RequestMiddleware) -> None:
 def add_response_middleware(self, middleware: ResponseMiddleware) -> None:
     """
     Add a middleware function that will be called after each response.
-    
+
     Args:
         middleware: A function that takes a Response object and returns a modified Response object
     """
@@ -193,7 +193,7 @@ def add_response_middleware(self, middleware: ResponseMiddleware) -> None:
 
 ### Caching
 
-Caching is configured through the constructor options `enable_cache` and `cache_ttl`. 
+Caching is configured through the constructor options `enable_cache` and `cache_ttl`.
 Additionally, you can use the `force_refresh` parameter on request methods to bypass the cache.
 
 ```python
@@ -205,7 +205,7 @@ async def clear_cache(self) -> None:
 async def get_cache_stats(self) -> Dict[str, int]:
     """
     Get cache statistics.
-    
+
     Returns:
         Dictionary with cache hit/miss counts
     """
@@ -219,7 +219,7 @@ Rate limiting is configured through the constructor options `rate_limit` and `ra
 async def get_rate_limit_stats(self) -> Dict[str, float]:
     """
     Get rate limiting statistics.
-    
+
     Returns:
         Dictionary with rate limiting statistics
     """
@@ -231,7 +231,7 @@ async def get_rate_limit_stats(self) -> Dict[str, float]:
 def create_batch(self) -> RequestBatch:
     """
     Create a new request batch.
-    
+
     Returns:
         A new RequestBatch instance
     """
@@ -243,11 +243,11 @@ async def execute_batch(
 ) -> List[Response]:
     """
     Execute a batch of requests concurrently.
-    
+
     Args:
         batch: The RequestBatch to execute
         max_connections: Maximum number of concurrent connections
-        
+
     Returns:
         List of Response objects in the same order as the requests
     """
@@ -260,12 +260,12 @@ async def execute_batch_with_model(
 ) -> List[Union[T, Exception]]:
     """
     Execute a batch of requests and parse each response into the given model.
-    
+
     Args:
         batch: The RequestBatch to execute
         response_model: Pydantic model to parse each response into
         max_connections: Maximum number of concurrent connections
-        
+
     Returns:
         List of model instances or exceptions in the same order as the requests
     """
@@ -304,19 +304,19 @@ class ResponseModel(BaseModel):
     elapsed: Optional[float] = None
     url: Optional[HttpUrl] = None
     timestamp: datetime = Field(default_factory=datetime.now)
-    
+
     @property
     def is_success(self) -> bool:
         """Check if the response was successful (2xx status code)."""
-        
+
     @property
     def is_redirect(self) -> bool:
         """Check if the response is a redirect (3xx status code)."""
-        
+
     @property
     def is_client_error(self) -> bool:
         """Check if the response is a client error (4xx status code)."""
-        
+
     @property
     def is_server_error(self) -> bool:
         """Check if the response is a server error (5xx status code)."""
@@ -332,7 +332,7 @@ class GenericResponse(Generic[T], BaseModel):
     data: Optional[T] = None
     meta: Optional[Dict[str, Any]] = None
     errors: Optional[List[Dict[str, Any]]] = None
-    
+
     @property
     def has_errors(self) -> bool:
         """Check if the response contains errors."""
@@ -343,11 +343,11 @@ class GenericResponse(Generic[T], BaseModel):
 ```python
 class RequestBatch(BaseModel):
     """A batch of HTTP requests to be executed together."""
-    
+
     requests: List[Dict[str, Any]] = Field(default_factory=list)
     max_connections: int = 10
     timeout: float = 30.0
-    
+
     def add_request(
         self,
         method: HttpMethod,
@@ -356,27 +356,27 @@ class RequestBatch(BaseModel):
     ) -> int:
         """
         Add a request to the batch.
-        
+
         Args:
             method: HTTP method
             url: URL
             **kwargs: Additional arguments to pass to httpx.request
-            
+
         Returns:
             The index of the added request in the batch
         """
-    
+
     async def execute(self, client: httpx.AsyncClient) -> List[httpx.Response]:
         """
         Execute all requests in the batch concurrently.
-        
+
         Args:
             client: HTTP client to use
-            
+
         Returns:
             List of responses in the same order as the requests
         """
-    
+
     def clear(self) -> None:
         """Clear all requests from the batch."""
 ```
@@ -406,11 +406,11 @@ Enhanced HTTPX provides several specialized exception classes:
 def select_json_path(data: Any, path: str) -> Any:
     """
     Extract data from a JSON structure using a JSONPath expression.
-    
+
     Args:
         data: JSON data to extract from
         path: JSONPath expression
-        
+
     Returns:
         Extracted data
     """
@@ -422,10 +422,10 @@ def select_json_path(data: Any, path: str) -> Any:
 def serialize_json(data: Any) -> str:
     """
     Serialize data to JSON string using orjson.
-    
+
     Args:
         data: Data to serialize
-        
+
     Returns:
         JSON string
     """
@@ -433,10 +433,10 @@ def serialize_json(data: Any) -> str:
 def deserialize_json(data: str) -> Any:
     """
     Deserialize JSON string to Python object using orjson.
-    
+
     Args:
         data: JSON string to deserialize
-        
+
     Returns:
         Deserialized Python object
     """
@@ -452,7 +452,7 @@ def log_request(
 ) -> None:
     """
     Log an HTTP request.
-    
+
     Args:
         method: HTTP method
         url: URL
@@ -464,7 +464,7 @@ def log_response(
 ) -> None:
     """
     Log an HTTP response.
-    
+
     Args:
         response: Response object
     """

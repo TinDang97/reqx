@@ -1,6 +1,7 @@
-from pydantic import BaseModel, ValidationError
 import pytest
 from enhanced_httpx.models import RequestModel, ResponseModel
+from pydantic import BaseModel, ValidationError
+
 
 class TestRequestModel:
     def test_valid_request_model(self):
@@ -9,7 +10,7 @@ class TestRequestModel:
             "method": "GET",
             "headers": {"Authorization": "Bearer token"},
             "cookies": {"session_id": "abc123"},
-            "body": None
+            "body": None,
         }
         request = RequestModel(**data)
         assert request.url == data["url"]
@@ -23,7 +24,7 @@ class TestRequestModel:
             "method": "GET",
             "headers": {"Authorization": "Bearer token"},
             "cookies": {"session_id": "abc123"},
-            "body": None
+            "body": None,
         }
         with pytest.raises(ValidationError):
             RequestModel(**data)
@@ -34,17 +35,18 @@ class TestRequestModel:
             "method": "INVALID_METHOD",
             "headers": {"Authorization": "Bearer token"},
             "cookies": {"session_id": "abc123"},
-            "body": None
+            "body": None,
         }
         with pytest.raises(ValidationError):
             RequestModel(**data)
+
 
 class TestResponseModel:
     def test_valid_response_model(self):
         data = {
             "status_code": 200,
             "headers": {"Content-Type": "application/json"},
-            "body": {"key": "value"}
+            "body": {"key": "value"},
         }
         response = ResponseModel(**data)
         assert response.status_code == data["status_code"]
@@ -52,10 +54,7 @@ class TestResponseModel:
         assert response.body == data["body"]
 
     def test_invalid_response_model_missing_status_code(self):
-        data = {
-            "headers": {"Content-Type": "application/json"},
-            "body": {"key": "value"}
-        }
+        data = {"headers": {"Content-Type": "application/json"}, "body": {"key": "value"}}
         with pytest.raises(ValidationError):
             ResponseModel(**data)
 
@@ -63,7 +62,7 @@ class TestResponseModel:
         data = {
             "status_code": "NOT_A_NUMBER",
             "headers": {"Content-Type": "application/json"},
-            "body": {"key": "value"}
+            "body": {"key": "value"},
         }
         with pytest.raises(ValidationError):
             ResponseModel(**data)

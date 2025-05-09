@@ -5,15 +5,15 @@ This shows how to use request and response middleware for custom processing.
 """
 
 import asyncio
-import sys
-import os
-import time
 import json
-from typing import Dict, Any
+import os
+import sys
+import time
+from typing import Any, Dict
 
 # Add parent directory to path for importing enhanced_httpx
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src.enhanced_httpx import EnhancedClient, Response
+from src import EnhancedClient, Response
 
 
 async def auth_middleware(method: str, url: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:

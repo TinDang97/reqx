@@ -1,31 +1,42 @@
-from httpx import AsyncClient, Response, Timeout, Limits, TransportError
-from pydantic import BaseModel, Field, TypeAdapter
+import asyncio
+import base64
+import hashlib
+import logging
+import os
+import ssl
+import time
+from datetime import datetime, timedelta
 from typing import (
     Any,
+    Awaitable,
+    Callable,
     Dict,
+    Generic,
     List,
     Optional,
-    Union,
-    TypeVar,
-    Generic,
+    Set,
     Type,
+    TypeVar,
+    Union,
     cast,
     overload,
-    Callable,
-    Awaitable,
-    Set,
 )
-import orjson
-import asyncio
-import uvloop
 from urllib.parse import urljoin
-import ssl
-import logging
-import time
-import hashlib
-from datetime import datetime, timedelta
-from .exceptions import RequestError, ResponseError, SessionError, MiddlewareError, RateLimitError
-from .utils import log_request, log_response, serialize_json, deserialize_json
+
+import orjson
+import uvloop
+from httpx import AsyncClient, Limits, Response, Timeout, TransportError
+from pydantic import BaseModel, Field, TypeAdapter
+
+from .exceptions import (
+    MiddlewareError,
+    RateLimitError,
+    RequestError,
+    ResponseError,
+    SecurityError,
+    SessionError,
+)
+from .utils import deserialize_json, log_request, log_response, serialize_json
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 logger = logging.getLogger("enhanced_httpx")
@@ -129,6 +140,85 @@ class RequestModel(BaseModel):
     verify_ssl: bool = True
 
 
+class CertificatePinner:
+    """Certificate pinning for enhanced security against MITM attacks."""
+
+    def __init__(self, pins: Dict[str, List[str]] = None):
+        """
+        Initialize a certificate pinner.
+
+        Args:
+            pins: Dictionary mapping hostnames to lists of base64-encoded SHA-256 certificate hashes
+                 Example: {"api.example.com": ["sha256/ABC123...", "sha256/DEF456..."]}
+        """
+        self.pins = pins or {}
+
+    def add_pin(self, hostname: str, pin: str):
+        """
+        Add a certificate pin for a hostname.
+
+        Args:
+            hostname: The hostname to pin
+            pin: Base64-encoded SHA-256 hash of the certificate public key,
+                 prefixed with 'sha256/'
+        """
+        if hostname not in self.pins:
+            self.pins[hostname] = []
+
+        if pin not in self.pins[hostname]:
+            self.pins[hostname].append(pin)
+
+    def remove_pin(self, hostname: str, pin: str = None):
+        """
+        Remove certificate pins for a hostname.
+
+        Args:
+            hostname: The hostname to remove pins for
+            pin: Specific pin to remove, or None to remove all pins for the hostname
+        """
+        if hostname not in self.pins:
+            return
+
+        if pin is None:
+            del self.pins[hostname]
+        elif pin in self.pins[hostname]:
+            self.pins[hostname].remove(pin)
+
+    def verify_certificate(self, hostname: str, cert: dict) -> bool:
+        """
+        Verify a certificate against pinned certificates.
+
+        Args:
+            hostname: The hostname that was connected to
+            cert: The certificate information from the server
+
+        Returns:
+            True if the certificate matches a pin or no pins exist for the hostname
+
+        Raises:
+            SecurityError: If certificate pinning fails
+        """
+        if hostname not in self.pins or not self.pins[hostname]:
+            return True
+
+        # Extract the public key
+        if not cert or "subject_public_key_info" not in cert:
+            raise SecurityError("Certificate missing public key information")
+
+        # Hash the public key info
+        digest = hashlib.sha256(cert["subject_public_key_info"]).digest()
+        pin_hash = f"sha256/{base64.b64encode(digest).decode('ascii')}"
+
+        # Check if the hash matches any of our pins
+        if pin_hash in self.pins[hostname]:
+            return True
+
+        raise SecurityError(
+            f"Certificate pin verification failed for {hostname}. "
+            f"Expected one of {self.pins[hostname]}, got {pin_hash}"
+        )
+
+
 class EnhancedClient:
     """
     An enhanced HTTP client built on top of httpx with additional features
@@ -155,6 +245,7 @@ class EnhancedClient:
         cache_ttl: int = 300,  # Default cache TTL in seconds
         rate_limit: Optional[float] = None,  # Requests per second
         rate_limit_max_tokens: int = 60,  # Maximum rate limit tokens
+        certificate_pins: Dict[str, List[str]] = None,  # Certificate pinning configuration
     ):
         """
         Initialize the EnhancedClient with custom configuration.
@@ -178,6 +269,8 @@ class EnhancedClient:
             cache_ttl: Default cache TTL in seconds
             rate_limit: Optional rate limit in requests per second
             rate_limit_max_tokens: Maximum tokens for rate limiting
+            certificate_pins:
+                Dictionary mapping hostnames to lists of base64-encoded SHA-256 certificate hashes
         """
         self.base_url = base_url
         self.default_headers = headers or {}
@@ -257,6 +350,9 @@ class EnhancedClient:
                 )
 
         self.client = AsyncClient(**client_kwargs)
+
+        # Initialize certificate pinner if pins are provided
+        self.certificate_pinner = CertificatePinner(certificate_pins)
 
     async def __aenter__(self):
         return self
@@ -497,6 +593,12 @@ class EnhancedClient:
 
                 # Apply response middlewares
                 response = await self._apply_response_middlewares(response)
+
+                # Verify the server certificate if certificate pinning is enabled
+                if self.certificate_pinner:
+                    cert = response.extensions.get("cert")
+                    if cert:
+                        self.certificate_pinner.verify_certificate(response.url.host, cert)
 
                 # Check if the response indicates an error
                 response.raise_for_status()
@@ -788,7 +890,7 @@ class EnhancedClient:
         requests: List[Dict[str, Any]],
         concurrency_limit: int = 10,
         response_model: Type[T] = None,
-        raise_exceptions: bool = False
+        raise_exceptions: bool = False,
     ) -> List[Union[T, Response, Exception]]:
         """
         Execute multiple requests in parallel with concurrency control.
@@ -810,7 +912,7 @@ class EnhancedClient:
             async with semaphore:
                 method = req_config.pop("method", "GET")
                 url = req_config.pop("url")
-                
+
                 try:
                     response = await self.request(method, url, **req_config)
                     results[index] = response
@@ -820,36 +922,26 @@ class EnhancedClient:
                     results[index] = e
 
         # Create tasks for all requests
-        tasks = [
-            _process_request(i, req) 
-            for i, req in enumerate(requests)
-        ]
-        
+        tasks = [_process_request(i, req) for i, req in enumerate(requests)]
+
         # Execute all requests with concurrency control
         await asyncio.gather(*tasks)
         return results
-        
+
     async def batch_get(
-        self, 
-        urls: List[str], 
-        concurrency_limit: int = 10,
-        response_model: Type[T] = None,
-        **kwargs
+        self, urls: List[str], concurrency_limit: int = 10, response_model: Type[T] = None, **kwargs
     ) -> List[Union[T, Response, Exception]]:
         """
         Execute multiple GET requests in parallel.
-        
+
         Args:
             urls: List of URLs to send GET requests to
             concurrency_limit: Maximum number of concurrent requests
             response_model: Optional Pydantic model to parse responses into
             **kwargs: Additional kwargs to apply to all requests
-            
+
         Returns:
             List of responses in the same order as the URLs
         """
-        requests = [
-            {"method": "GET", "url": url, **kwargs}
-            for url in urls
-        ]
+        requests = [{"method": "GET", "url": url, **kwargs} for url in urls]
         return await self.batch_request(requests, concurrency_limit, response_model)

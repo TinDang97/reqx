@@ -36,16 +36,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "mypy>=1.4.0",
-    "ruff>=0.0.270",
-    "httpx-cache>=0.11.0",
-    "respx>=0.20.0",
-    "pytest-cov>=4.1.0",
+compression = [
+    "brotli>=1.0.9",
 ]
 
 [project.urls]
@@ -90,3 +82,18 @@ ignore = []
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = "test_*.py"
+
+[dependency-groups]
+dev = [
+    "aiohttp>=3.10.11",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.4.0",
+    "ruff>=0.0.270",
+    "httpx-cache>=0.11.0",
+    "respx>=0.20.0",
+    "pytest-cov>=4.1.0",
+    "pre-commit>=3.5.0",
+]

@@ -1,4 +1,5 @@
-from typing import Optional, Dict, Any, Union
+from typing import Any, Dict, List, Optional, Union
+
 from httpx import Response
 
 
@@ -113,6 +114,54 @@ class MiddlewareError(HTTPXError):
 
     def __init__(self, message: str, original_exception: Optional[Exception] = None):
         self.original_exception = original_exception
+        super().__init__(message)
+
+
+class SecurityError(HTTPXError):
+    """
+    Error related to security checks.
+
+    This is raised when security-related checks fail, such as certificate
+    pinning validation, HSTS validation, etc.
+    """
+
+    pass
+
+
+class CircuitBreakerError(HTTPXError):
+    """
+    Error when a circuit breaker prevents a request.
+
+    This is raised when a circuit breaker is open for a particular host,
+    indicating that the service is currently considered unavailable.
+    """
+
+    def __init__(self, message: str, host: str = None, retry_after: float = None):
+        self.host = host
+        self.retry_after = retry_after
+        super().__init__(message)
+
+
+class GraphQLError(HTTPXError):
+    """
+    Error related to GraphQL request execution.
+
+    This is raised when a GraphQL request fails, either due to HTTP errors
+    or errors in the GraphQL response itself.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        http_status: int = None,
+        errors: List[Dict[str, Any]] = None,
+        data: Dict[str, Any] = None,
+        response_data: Dict[str, Any] = None,
+    ):
+        self.http_status = http_status
+        self.errors = errors or []
+        self.data = data
+        self.response_data = response_data
         super().__init__(message)
 
 

@@ -2,14 +2,15 @@
 Data models for the enhanced-httpx library.
 """
 
-from pydantic import BaseModel, HttpUrl, Field, validator, root_validator, TypeAdapter
-from pydantic.version import VERSION as PYDANTIC_VERSION
-from typing import Optional, Any, Dict, Union, List, TypeVar, Generic, Type, Callable, Awaitable
-from enum import Enum
 import json
 import re
 from datetime import datetime
+from enum import Enum
+from typing import Any, Awaitable, Callable, Dict, Generic, List, Optional, Type, TypeVar, Union
+
 import httpx
+from pydantic import BaseModel, Field, HttpUrl, TypeAdapter, root_validator, validator
+from pydantic.version import VERSION as PYDANTIC_VERSION
 
 T = TypeVar("T")
 
