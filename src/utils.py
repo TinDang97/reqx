@@ -1,5 +1,5 @@
 """
-Utility functions for enhanced-httpx.
+Utility functions for Reqx client.
 """
 
 import json
@@ -12,6 +12,11 @@ from urllib.parse import urlencode
 import httpx
 import jsonpath_ng
 import orjson
+import multiprocessing
+import os
+import platform
+import psutil
+import socket
 
 logger = logging.getLogger("reqx")
 
@@ -295,3 +300,177 @@ def sanitize_sensitive_data(data: Any) -> Any:
         return data.replace("sensitive", "[REDACTED]")
     else:
         return data
+
+
+def get_system_resource_metrics() -> Dict[str, Union[int, float]]:
+    """
+    Get metrics about system resources.
+
+    Returns:
+        Dictionary containing system metrics
+    """
+    metrics = {
+        "cpu_count": psutil.cpu_count(logical=False) or 1,  # Physical cores
+        "cpu_count_logical": psutil.cpu_count(logical=True) or 1,  # Logical cores
+        "memory_gb": psutil.virtual_memory().total / (1024 * 1024 * 1024),  # Memory in GB
+        "memory_available_gb": psutil.virtual_memory().available / (1024 * 1024 * 1024),
+        "os": platform.system(),
+        "python_implementation": platform.python_implementation(),
+    }
+
+    if hasattr(socket, "SOMAXCONN"):
+        metrics["socket_max_connections"] = socket.SOMAXCONN
+
+    return metrics
+
+
+def get_optimal_connection_pool_settings() -> Dict[str, int]:
+    """
+    Calculate optimal connection pool settings based on system resources.
+
+    This function analyzes the available system resources and returns
+    recommended connection pool settings for optimal performance.
+
+    Returns:
+        Dictionary with recommended connection pool settings
+    """
+    metrics = get_system_resource_metrics()
+
+    # Base calculations on available CPU cores and memory
+    cpu_cores = metrics["cpu_count_logical"]
+    memory_gb = metrics["memory_available_gb"]
+
+    # Calculate pool size based on available resources
+    # Formula: min(max(8, cores * 4), 100)
+    max_connections = min(max(8, cpu_cores * 4), 100)
+
+    # Adjust based on available memory - reduce connections if memory is limited
+    if memory_gb < 1.0:  # Less than 1GB available
+        max_connections = min(max_connections, 20)
+    elif memory_gb < 2.0:  # Less than 2GB available
+        max_connections = min(max_connections, 40)
+    elif memory_gb > 8.0:  # More than 8GB available
+        max_connections = min(max_connections * 2, 200)  # Double up to 200
+
+    # Calculate keepalive connections as a percentage of max
+    max_keepalive = int(max_connections * 0.3)
+
+    # Calculate keepalive expiry
+    # Use shorter expiry when resources are constrained
+    if memory_gb < 1.0:
+        keepalive_expiry = 30  # 30 seconds for low memory
+    else:
+        keepalive_expiry = 60  # 60 seconds default
+
+    return {
+        "max_connections": max_connections,
+        "max_keepalive_connections": max_keepalive,
+        "keepalive_expiry": keepalive_expiry,
+    }
+
+
+def detect_proxy_settings() -> Dict[str, Optional[str]]:
+    """
+    Detect system proxy settings.
+
+    Returns:
+        Dictionary with proxy settings
+    """
+    proxies = {
+        "http": os.environ.get("HTTP_PROXY"),
+        "https": os.environ.get("HTTPS_PROXY"),
+        "no_proxy": os.environ.get("NO_PROXY"),
+    }
+
+    return proxies
+
+
+def is_known_http2_host(hostname: str) -> bool:
+    """
+    Check if a hostname is known to support HTTP/2.
+
+    Args:
+        hostname: Hostname to check
+
+    Returns:
+        True if the host is known to support HTTP/2, False otherwise
+    """
+    # List of known hosts that support HTTP/2
+    http2_hosts = [
+        "www.google.com",
+        "github.com",
+        "www.cloudflare.com",
+        "www.facebook.com",
+        "www.youtube.com",
+        "twitter.com",
+        "www.amazon.com",
+        "www.reddit.com",
+        "www.wikipedia.org",
+    ]
+
+    # Check if hostname matches or is a subdomain of a known host
+    for known_host in http2_hosts:
+        if hostname == known_host or hostname.endswith("." + known_host):
+            return True
+
+    return False
+
+
+def calculate_backoff(retry_count: int, base_delay: float = 0.5, max_delay: float = 60.0) -> float:
+    """
+    Calculate exponential backoff delay for retries.
+
+    Args:
+        retry_count: Current retry attempt number (1-based)
+        base_delay: Base delay in seconds
+        max_delay: Maximum delay in seconds
+
+    Returns:
+        Delay in seconds for the current retry
+    """
+    # Full jitter exponential backoff
+    # delay = min(cap, base * 2 ** attempt) * random(0, 1)
+    import random
+
+    # Calculate exponential backoff with full jitter
+    delay = min(max_delay, base_delay * (2 ** (retry_count - 1)))
+    delay = delay * random.random()
+
+    return delay
+
+
+def adaptive_retry_strategy(retry_count: int, status_code: Optional[int] = None) -> float:
+    """
+    Calculate the adaptive retry delay based on retry count and status code.
+
+    This is more advanced than simple exponential backoff because it
+    considers the type of error (via status code) to adjust the backoff strategy.
+
+    Args:
+        retry_count: Current retry attempt (0-based)
+        status_code: HTTP status code from the failed request, if available
+
+    Returns:
+        Delay in seconds before the next retry attempt
+    """
+    # Base delay with exponential backoff and small random jitter
+    import random
+
+    base_delay = 0.1 * (2**retry_count)
+    jitter = random.uniform(0, 0.1 * base_delay)
+
+    # Adjust based on status code if provided
+    status_factor = 1.0
+    if status_code is not None:
+        if status_code == 429:  # Too Many Requests
+            # Increase backoff for rate limiting
+            status_factor = 2.0
+        elif 500 <= status_code < 600:
+            # Server errors might need longer backoffs
+            status_factor = 1.5
+
+    # Calculate final delay with limits
+    delay = (base_delay * status_factor) + jitter
+
+    # Cap at reasonable maximum (30 seconds)
+    return min(delay, 30.0)

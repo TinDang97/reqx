@@ -1,471 +1,363 @@
-# Enhanced HTTPX API Reference
+# Enhanced-HTTPX API Reference
 
-This document provides detailed API documentation for the enhanced-httpx library.
+This document provides a detailed reference for the Enhanced-HTTPX library's public API.
 
 ## Table of Contents
 
-- [ReqxClient](#ReqxClient)
-  - [Constructor](#constructor)
-  - [Basic Request Methods](#basic-request-methods)
-  - [Middleware Support](#middleware-support)
-  - [Caching](#caching)
-  - [Rate Limiting](#rate-limiting)
-  - [Batch Requests](#batch-requests)
-- [Models](#models)
-  - [RequestModel](#requestmodel)
-  - [ResponseModel](#responsemodel)
-  - [GenericResponse](#genericresponse)
-  - [RequestBatch](#requestbatch)
-- [Exceptions](#exceptions)
-- [Utilities](#utilities)
+- [Client Classes](#client-classes)
+  - [ReqxClient](#reqxclient)
+  - [ReqxClientBuilder](#reqxclientbuilder)
+- [Request and Response](#request-and-response)
+  - [Models](#models)
+  - [Middleware](#middleware)
+- [Advanced Features](#advanced-features)
+  - [GraphQL](#graphql)
+  - [Webhooks](#webhooks)
+  - [Transport Management](#transport-management)
+  - [Adaptive Timeouts](#adaptive-timeouts)
+  - [System-Aware Optimization](#system-aware-optimization)
 
-## ReqxClient
+## Client Classes
 
-The `ReqxClient` class is the main interface for making HTTP requests.
+### ReqxClient
 
-```python
-from reqx import ReqxClient
-```
+The main client class for making HTTP requests.
 
-### Constructor
+#### Constructor
 
 ```python
 ReqxClient(
-    base_url: str = "",
+    base_url: str = None,
+    timeout: float = 30.0,
     headers: Dict[str, str] = None,
     cookies: Dict[str, str] = None,
-    timeout: float = 30.0,
-    max_connections: int = 100,
-    max_keepalive_connections: int = 20,
-    keepalive_expiry: int = 60,
+    auth: Auth = None,
     follow_redirects: bool = True,
-    verify_ssl: bool = True,
-    max_retries: int = 3,
-    retry_backoff: float = 0.5,
+    max_redirects: int = 10,
+    verify: bool = True,
+    cert: Union[str, Tuple[str, str]] = None,
     http2: bool = False,
-    enable_http3: bool = False,
-    debug: bool = False,
-    enable_cache: bool = False,
-    cache_ttl: int = 300,
-    rate_limit: Optional[float] = None,
-    rate_limit_max_tokens: int = 60,
+    http3: bool = False,
+    use_aiohttp: bool = False,
+    adaptive_timeout: bool = False,
+    retry: bool = False,
+    max_retries: int = 3,
+    middleware: List[Middleware] = None,
+    auto_optimize: bool = False
 )
 ```
 
-Parameters:
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `base_url` | `str` | `""` | Base URL for all requests |
-| `headers` | `Dict[str, str]` | `None` | Default headers for all requests |
-| `cookies` | `Dict[str, str]` | `None` | Default cookies for all requests |
-| `timeout` | `float` | `30.0` | Default timeout for all requests in seconds |
-| `max_connections` | `int` | `100` | Maximum number of connections |
-| `max_keepalive_connections` | `int` | `20` | Maximum number of idle keepalive connections |
-| `keepalive_expiry` | `int` | `60` | Keepalive connection expiry in seconds |
-| `follow_redirects` | `bool` | `True` | Whether to follow redirects by default |
-| `verify_ssl` | `bool` | `True` | Whether to verify SSL certificates by default |
-| `max_retries` | `int` | `3` | Maximum number of retries for failed requests |
-| `retry_backoff` | `float` | `0.5` | Exponential backoff factor for retries |
-| `http2` | `bool` | `False` | Whether to use HTTP/2 |
-| `enable_http3` | `bool` | `False` | Whether to enable HTTP/3 (QUIC) if available |
-| `debug` | `bool` | `False` | Whether to enable debug logging |
-| `enable_cache` | `bool` | `False` | Whether to enable response caching |
-| `cache_ttl` | `int` | `300` | Default cache TTL in seconds |
-| `rate_limit` | `Optional[float]` | `None` | Optional rate limit in requests per second |
-| `rate_limit_max_tokens` | `int` | `60` | Maximum tokens for rate limiting |
-
-### Basic Request Methods
-
-#### GET Request
+#### Basic Methods
 
 ```python
-async def get(
-    self,
-    url: str,
-    *,
-    params: Dict[str, Any] = None,
-    headers: Dict[str, str] = None,
-    cookies: Dict[str, str] = None,
-    follow_redirects: bool = None,
-    timeout: float = None,
-    response_model: Type[T] = None,
-    force_refresh: bool = False,
-) -> Union[Response, T]:
-    """
-    Send an HTTP GET request.
+# Synchronous methods
+get(url, params=None, headers=None, **kwargs) -> Response
+post(url, data=None, json=None, headers=None, **kwargs) -> Response
+put(url, data=None, json=None, headers=None, **kwargs) -> Response
+patch(url, data=None, json=None, headers=None, **kwargs) -> Response
+delete(url, headers=None, **kwargs) -> Response
+head(url, headers=None, **kwargs) -> Response
+options(url, headers=None, **kwargs) -> Response
+request(method, url, **kwargs) -> Response
 
-    Args:
-        url: URL to request
-        params: Query parameters to append to the URL
-        headers: Custom headers for this request
-        cookies: Custom cookies for this request
-        follow_redirects: Whether to follow redirects
-        timeout: Request timeout in seconds
-        response_model: Optional Pydantic model to parse the response into
-        force_refresh: Whether to ignore cache and force a fresh request
-
-    Returns:
-        Response object or parsed model instance if response_model is provided
-    """
+# Asynchronous methods
+async get(url, params=None, headers=None, **kwargs) -> Response
+async post(url, data=None, json=None, headers=None, **kwargs) -> Response
+async put(url, data=None, json=None, headers=None, **kwargs) -> Response
+async patch(url, data=None, json=None, headers=None, **kwargs) -> Response
+async delete(url, headers=None, **kwargs) -> Response
+async head(url, headers=None, **kwargs) -> Response
+async options(url, headers=None, **kwargs) -> Response
+async request(method, url, **kwargs) -> Response
 ```
 
-#### POST Request
+#### Advanced Methods
 
 ```python
-async def post(
-    self,
-    url: str,
-    *,
-    data: Any = None,
-    json: Dict[str, Any] = None,
-    params: Dict[str, Any] = None,
-    headers: Dict[str, str] = None,
-    cookies: Dict[str, str] = None,
-    follow_redirects: bool = None,
-    timeout: float = None,
-    response_model: Type[T] = None,
-) -> Union[Response, T]:
-    """
-    Send an HTTP POST request.
+# Batch requests
+async batch_request(requests: List[Dict]) -> List[Response]
 
-    Args:
-        url: URL to request
-        data: Form data or request body
-        json: JSON data to include in the request body
-        params: Query parameters to append to the URL
-        headers: Custom headers for this request
-        cookies: Custom cookies for this request
-        follow_redirects: Whether to follow redirects
-        timeout: Request timeout in seconds
-        response_model: Optional Pydantic model to parse the response into
+# GraphQL support
+async graphql(url, query, variables=None, operation_name=None, **kwargs) -> Response
 
-    Returns:
-        Response object or parsed model instance if response_model is provided
-    """
+# Webhook management
+async webhook_send(url, event, payload, signature_key=None) -> Response
+async webhook_verify(request_data, signature, signature_key) -> bool
+
+# Transport and timeout management
+get_timeout_statistics() -> Dict
+get_transport_metrics() -> Dict
+set_default_transport(transport_name: str)
 ```
 
-Similar methods are available for `put()`, `patch()`, `delete()`, `head()`, and `options()`.
-
-#### Request Method
+#### Context Manager Support
 
 ```python
-async def request(
-    self,
-    method: str,
-    url: str,
-    **kwargs
-) -> Response:
-    """
-    Send an HTTP request with the given method.
+# Synchronous context manager
+with ReqxClient() as client:
+    response = client.get("https://example.com")
 
-    Args:
-        method: HTTP method (GET, POST, etc.)
-        url: URL to request
-        **kwargs: Additional arguments to pass to httpx.request
-
-    Returns:
-        Response object
-    """
+# Asynchronous context manager
+async with ReqxClient() as client:
+    response = await client.get("https://example.com")
 ```
 
-### Middleware Support
+### ReqxClientBuilder
+
+A builder class for creating customized client instances.
 
 ```python
-def add_request_middleware(self, middleware: RequestMiddleware) -> None:
-    """
-    Add a middleware function that will be called before each request.
+builder = ReqxClientBuilder()
 
-    Args:
-        middleware: A function that takes (method, url, request_kwargs) and returns modified request_kwargs
-    """
+# Base configuration
+builder.with_base_url(url: str)
+builder.with_timeout(timeout: float)
+builder.with_headers(headers: Dict[str, str])
+builder.with_cookies(cookies: Dict[str, str])
+builder.with_auth(auth: Auth)
+builder.with_verify(verify: bool)
+builder.with_cert(cert: Union[str, Tuple[str, str]])
+builder.with_follow_redirects(follow_redirects: bool, max_redirects: int = 10)
+
+# Advanced features
+builder.with_http2(enabled: bool = True)
+builder.with_http3(enabled: bool = False)
+builder.use_aiohttp(enabled: bool = False)
+builder.with_adaptive_timeout(enabled: bool = True, initial_timeout: float = 10.0)
+builder.with_middleware(middleware: Middleware)
+builder.with_retry(enabled: bool = True, max_retries: int = 3, retry_statuses: List[int] = None)
+
+# Preset profiles
+builder.for_high_performance()
+builder.for_reliability()
+builder.for_low_resources()
+builder.auto_optimize()
+
+# Build the client
+client = builder.build()
 ```
 
-```python
-def add_response_middleware(self, middleware: ResponseMiddleware) -> None:
-    """
-    Add a middleware function that will be called after each response.
+## Request and Response
 
-    Args:
-        middleware: A function that takes a Response object and returns a modified Response object
-    """
-```
+### Models
 
-### Caching
-
-Caching is configured through the constructor options `enable_cache` and `cache_ttl`.
-Additionally, you can use the `force_refresh` parameter on request methods to bypass the cache.
+#### Response
 
 ```python
-async def clear_cache(self) -> None:
-    """
-    Clear the response cache.
-    """
-
-async def get_cache_stats(self) -> Dict[str, int]:
-    """
-    Get cache statistics.
-
-    Returns:
-        Dictionary with cache hit/miss counts
-    """
-```
-
-### Rate Limiting
-
-Rate limiting is configured through the constructor options `rate_limit` and `rate_limit_max_tokens`.
-
-```python
-async def get_rate_limit_stats(self) -> Dict[str, float]:
-    """
-    Get rate limiting statistics.
-
-    Returns:
-        Dictionary with rate limiting statistics
-    """
-```
-
-### Batch Requests
-
-```python
-def create_batch(self) -> RequestBatch:
-    """
-    Create a new request batch.
-
-    Returns:
-        A new RequestBatch instance
-    """
-
-async def execute_batch(
-    self,
-    batch: RequestBatch,
-    max_connections: int = None
-) -> List[Response]:
-    """
-    Execute a batch of requests concurrently.
-
-    Args:
-        batch: The RequestBatch to execute
-        max_connections: Maximum number of concurrent connections
-
-    Returns:
-        List of Response objects in the same order as the requests
-    """
-
-async def execute_batch_with_model(
-    self,
-    batch: RequestBatch,
-    response_model: Type[T],
-    max_connections: int = None
-) -> List[Union[T, Exception]]:
-    """
-    Execute a batch of requests and parse each response into the given model.
-
-    Args:
-        batch: The RequestBatch to execute
-        response_model: Pydantic model to parse each response into
-        max_connections: Maximum number of concurrent connections
-
-    Returns:
-        List of model instances or exceptions in the same order as the requests
-    """
-```
-
-## Models
-
-### RequestModel
-
-```python
-class RequestModel(BaseModel):
-    """
-    Model for HTTP requests with comprehensive validation.
-    """
-    url: HttpUrl
-    method: HttpMethod = HttpMethod.GET
-    headers: Dict[str, str] = Field(default_factory=dict)
-    cookies: Dict[str, str] = Field(default_factory=dict)
-    params: Dict[str, Any] = Field(default_factory=dict)
-    body: Optional[Union[str, Dict[str, Any], List[Any]]] = None
-    timeout: Optional[float] = None
-    follow_redirects: bool = True
-    verify_ssl: bool = True
-```
-
-### ResponseModel
-
-```python
-class ResponseModel(BaseModel):
-    """
-    Model for HTTP responses with proper validation.
-    """
+class Response:
+    # Properties
     status_code: int
-    headers: Dict[str, str] = Field(default_factory=dict)
-    body: Any = None
-    elapsed: Optional[float] = None
-    url: Optional[HttpUrl] = None
-    timestamp: datetime = Field(default_factory=datetime.now)
+    headers: Dict[str, str]
+    content: bytes
+    text: str
+    encoding: str
+    http_version: str
+    is_redirect: bool
+    is_error: bool
+    cookies: Dict[str, str]
+    url: str
+    elapsed: float
+    metadata: Dict  # Custom metadata added by middleware
 
-    @property
-    def is_success(self) -> bool:
-        """Check if the response was successful (2xx status code)."""
-
-    @property
-    def is_redirect(self) -> bool:
-        """Check if the response is a redirect (3xx status code)."""
-
-    @property
-    def is_client_error(self) -> bool:
-        """Check if the response is a client error (4xx status code)."""
-
-    @property
-    def is_server_error(self) -> bool:
-        """Check if the response is a server error (5xx status code)."""
+    # Methods
+    json() -> Dict
+    raise_for_status() -> None
+    close() -> None
 ```
 
-### GenericResponse
+### Middleware
+
+Middleware allows you to intercept and modify requests and responses.
 
 ```python
-class GenericResponse(Generic[T], BaseModel):
-    """
-    Generic response model that can be used to parse API responses into specific types.
-    """
-    data: Optional[T] = None
-    meta: Optional[Dict[str, Any]] = None
-    errors: Optional[List[Dict[str, Any]]] = None
-
-    @property
-    def has_errors(self) -> bool:
-        """Check if the response contains errors."""
-```
-
-### RequestBatch
-
-```python
-class RequestBatch(BaseModel):
-    """A batch of HTTP requests to be executed together."""
-
-    requests: List[Dict[str, Any]] = Field(default_factory=list)
-    max_connections: int = 10
-    timeout: float = 30.0
-
-    def add_request(
-        self,
-        method: HttpMethod,
-        url: str,
-        **kwargs
-    ) -> int:
+class Middleware:
+    async def process_request(self, ctx: RequestContext, next_middleware: Callable) -> ResponseContext:
         """
-        Add a request to the batch.
-
+        Process a request and optionally modify it.
+        
         Args:
-            method: HTTP method
-            url: URL
-            **kwargs: Additional arguments to pass to httpx.request
-
+            ctx: The request context with request details
+            next_middleware: The next middleware in the chain
+            
         Returns:
-            The index of the added request in the batch
+            A response context with response details
         """
-
-    async def execute(self, client: httpx.AsyncClient) -> List[httpx.Response]:
-        """
-        Execute all requests in the batch concurrently.
-
-        Args:
-            client: HTTP client to use
-
-        Returns:
-            List of responses in the same order as the requests
-        """
-
-    def clear(self) -> None:
-        """Clear all requests from the batch."""
+        # Default implementation just passes to next middleware
+        return await next_middleware(ctx)
 ```
 
-## Exceptions
-
-Enhanced HTTPX provides several specialized exception classes:
-
-- `RequestError`: Base class for all request-related errors
-- `ResponseError`: Base class for all response-related errors
-- `TimeoutError`: Raised when a request times out
-- `ConnectionError`: Raised when a connection cannot be established
-- `RedirectError`: Raised when there are too many redirects
-- `ClientError`: Raised for 4xx responses (has subclasses like `NotFoundError`, `UnauthorizedError`, etc.)
-- `ServerError`: Raised for 5xx responses
-- `ParseError`: Raised when there's an error parsing a response
-- `ValidationError`: Raised when there's an error validating a response against a model
-- `MiddlewareError`: Raised when there's an error in middleware processing
-- `RateLimitError`: Raised when rate limit is exceeded
-- `BatchRequestError`: Raised for errors in batch requests
-
-## Utilities
-
-### JSON Path Selection
+#### RequestContext
 
 ```python
-def select_json_path(data: Any, path: str) -> Any:
-    """
-    Extract data from a JSON structure using a JSONPath expression.
-
-    Args:
-        data: JSON data to extract from
-        path: JSONPath expression
-
-    Returns:
-        Extracted data
-    """
+class RequestContext:
+    method: str
+    url: str
+    params: Dict
+    headers: Dict[str, str]
+    cookies: Dict[str, str]
+    data: Any
+    json: Dict
+    timeout: float
+    metadata: Dict  # Custom metadata that middleware can use
 ```
 
-### JSON Serialization
+#### ResponseContext
 
 ```python
-def serialize_json(data: Any) -> str:
-    """
-    Serialize data to JSON string using orjson.
-
-    Args:
-        data: Data to serialize
-
-    Returns:
-        JSON string
-    """
-
-def deserialize_json(data: str) -> Any:
-    """
-    Deserialize JSON string to Python object using orjson.
-
-    Args:
-        data: JSON string to deserialize
-
-    Returns:
-        Deserialized Python object
-    """
+class ResponseContext:
+    status_code: int
+    headers: Dict[str, str]
+    content: bytes
+    encoding: str
+    cookies: Dict[str, str]
+    url: str
+    elapsed: float
+    http_version: str
+    metadata: Dict  # Custom metadata that middleware can use
 ```
 
-### Logging
+## Advanced Features
+
+### GraphQL
 
 ```python
-def log_request(
-    method: str,
-    url: str,
-    **kwargs
-) -> None:
+# Basic GraphQL query
+response = await client.graphql(
+    "https://api.example.com/graphql",
+    query="""
+    query {
+        users {
+            id
+            name
+        }
+    }
     """
-    Log an HTTP request.
+)
 
-    Args:
-        method: HTTP method
-        url: URL
-        **kwargs: Request arguments
-    """
+# Query with variables
+response = await client.graphql(
+    "https://api.example.com/graphql",
+    query="""
+    query GetUser($id: ID!) {
+        user(id: $id) {
+            id
+            name
+            email
+        }
+    }
+    """,
+    variables={"id": "123"}
+)
+```
 
-def log_response(
-    response: Response
-) -> None:
-    """
-    Log an HTTP response.
+### Webhooks
 
-    Args:
-        response: Response object
-    """
+```python
+# Send a webhook
+await client.webhook_send(
+    "https://webhook.example.com/endpoint",
+    event="user.created",
+    payload={"user_id": "123", "email": "user@example.com"},
+    signature_key="your_webhook_signing_key"
+)
+
+# Verify a webhook signature
+is_valid = await client.webhook_verify(
+    request_data=request.body,
+    signature=request.headers.get("X-Webhook-Signature"),
+    signature_key="your_webhook_signing_key"
+)
+```
+
+### Transport Management
+
+```python
+# Get transport metrics
+metrics = client.get_transport_metrics()
+"""
+{
+    "total_requests": 100,
+    "transports": {
+        "httpx": {"requests": 75, "errors": 2, "avg_duration": 0.123},
+        "aiohttp": {"requests": 25, "errors": 0, "avg_duration": 0.098}
+    },
+    "hosts_analyzed": 8,
+    "host_metrics": {
+        "api.example.com": {
+            "httpx": {"count": 30, "avg_duration": 0.110},
+            "aiohttp": {"count": 10, "avg_duration": 0.095},
+            "preferred": "aiohttp"
+        }
+    }
+}
+"""
+
+# Set default transport
+client.set_default_transport("aiohttp")
+
+# Make request with specific transport
+response = await client.get("https://api.example.com", transport="httpx")
+```
+
+### Adaptive Timeouts
+
+```python
+# Get timeout statistics
+stats = client.get_timeout_statistics()
+"""
+{
+    "api.example.com": {
+        "samples": 50,
+        "avg_duration": 0.347,
+        "p95_duration": 0.650,
+        "current_timeout": 1.3,
+        "timeouts": 2,
+        "success_rate": 0.96
+    }
+}
+"""
+
+# Configure adaptive timeouts
+client = (
+    ReqxClientBuilder()
+    .with_adaptive_timeout(
+        enabled=True,
+        initial_timeout=10.0,
+        min_timeout=1.0,
+        max_timeout=60.0,
+        multiplier=2.0
+    )
+    .build()
+)
+```
+
+### System-Aware Optimization
+
+```python
+# Get system resource metrics
+from src.utils import get_system_resource_metrics, get_optimal_connection_pool_settings
+
+metrics = get_system_resource_metrics()
+"""
+{
+    "cpu_count": 8,
+    "cpu_count_logical": 16,
+    "memory_gb": 16.0,
+    "memory_available_gb": 8.5,
+    "os": "Linux"
+}
+"""
+
+# Get optimal connection pool settings
+settings = get_optimal_connection_pool_settings()
+"""
+{
+    "max_connections": 64,
+    "max_keepalive_connections": 19,
+    "keepalive_expiry": 60
+}
+"""
+
+# Create an auto-optimized client
+client = ReqxClientBuilder().auto_optimize().build()
 ```

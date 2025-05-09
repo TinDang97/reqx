@@ -1,20 +1,20 @@
 [
   {
     "client": "reqx",
-    "requests": 300,
-    "duration_seconds": 1.313,
-    "requests_per_second": 228.96,
-    "avg_request_time_ms": 4.38,
-    "memory_usage_kb": 9958,
-    "timestamp": "2025-05-09T15:54:45.431103"
+    "requests": 1000,
+    "duration_seconds": 0.918,
+    "requests_per_second": 1089.8,
+    "avg_request_time_ms": 0.92,
+    "memory_usage_kb": 14928.333333333334,
+    "timestamp": "2025-05-10T00:00:35.284467"
   },
   {
     "client": "httpx",
-    "requests": 300,
-    "duration_seconds": 1.327,
-    "requests_per_second": 226.11,
-    "avg_request_time_ms": 4.42,
-    "memory_usage_kb": 9766.666666666666,
-    "timestamp": "2025-05-09T15:54:49.474688"
+    "requests": 1000,
+    "duration_seconds": 13.083,
+    "requests_per_second": 76.44,
+    "avg_request_time_ms": 13.08,
+    "memory_usage_kb": 14657,
+    "timestamp": "2025-05-10T00:01:14.648245"
   }
 ]

@@ -202,3 +202,128 @@ class TestFormatCurlCommand:
             "https://api.example.com/search?q=python&page=1" in curl
             or "https://api.example.com/search?page=1&q=python" in curl
         )
+
+
+class TestSystemOptimization:
+    """Tests for system-aware optimization utilities."""
+
+    def test_get_system_resource_metrics(self):
+        """Test retrieving system resource metrics."""
+        # Use actual system metrics for basic validation
+        metrics = get_system_resource_metrics()
+
+        # Basic validation of metrics structure
+        assert "cpu_count" in metrics
+        assert "memory_gb" in metrics
+        assert "os" in metrics
+        assert metrics["cpu_count"] > 0
+        assert metrics["memory_gb"] > 0
+
+    @patch("src.utils.get_system_resource_metrics")
+    def test_optimal_pool_settings_high_resources(self, mock_metrics):
+        """Test optimal connection pool settings with high system resources."""
+        # Mock a high-resource system
+        mock_metrics.return_value = {
+            "cpu_count": 16,
+            "cpu_count_logical": 32,
+            "memory_gb": 32.0,
+            "memory_available_gb": 16.0,
+            "os": "Linux",
+        }
+
+        # Get pool settings
+        settings = get_optimal_connection_pool_settings()
+
+        # For a high-resource system, should be near the upper end
+        assert settings["max_connections"] >= 100
+        assert settings["max_keepalive_connections"] >= 30
+        assert settings["keepalive_expiry"] == 60
+
+    @patch("src.utils.get_system_resource_metrics")
+    def test_optimal_pool_settings_low_resources(self, mock_metrics):
+        """Test optimal connection pool settings with limited system resources."""
+        # Mock a low-resource system
+        mock_metrics.return_value = {
+            "cpu_count": 1,
+            "cpu_count_logical": 2,
+            "memory_gb": 2.0,
+            "memory_available_gb": 0.5,
+            "os": "Linux",
+        }
+
+        # Get pool settings
+        settings = get_optimal_connection_pool_settings()
+
+        # For a low-resource system, should be conservative
+        assert settings["max_connections"] <= 20
+        assert settings["keepalive_expiry"] == 30  # Shorter expiry for low memory
+
+    @patch("src.utils.get_system_resource_metrics")
+    def test_optimal_pool_settings_medium_resources(self, mock_metrics):
+        """Test optimal connection pool settings with moderate system resources."""
+        # Mock a medium-resource system
+        mock_metrics.return_value = {
+            "cpu_count": 4,
+            "cpu_count_logical": 8,
+            "memory_gb": 8.0,
+            "memory_available_gb": 4.0,
+            "os": "Windows",
+        }
+
+        # Get pool settings
+        settings = get_optimal_connection_pool_settings()
+
+        # For a medium system, should be in the middle range
+        assert 20 <= settings["max_connections"] <= 100
+        assert settings["keepalive_expiry"] == 60  # Normal expiry for sufficient memory
+
+
+class TestHttpHelpers:
+    """Tests for HTTP-related utility functions."""
+
+    @patch("os.environ")
+    def test_detect_proxy_settings(self, mock_environ):
+        """Test detection of proxy settings from environment variables."""
+        # Mock environment variables
+        mock_environ.get.side_effect = lambda key, default=None: {
+            "HTTP_PROXY": "http://proxy:8080",
+            "HTTPS_PROXY": "https://proxy:8443",
+            "NO_PROXY": "localhost,127.0.0.1",
+        }.get(key, default)
+
+        # Get proxy settings
+        proxies = detect_proxy_settings()
+
+        # Validate settings
+        assert proxies["http"] == "http://proxy:8080"
+        assert proxies["https"] == "https://proxy:8443"
+        assert proxies["no_proxy"] == "localhost,127.0.0.1"
+
+    def test_is_known_http2_host(self):
+        """Test detection of known HTTP/2 hosts."""
+        # Test known hosts
+        assert is_known_http2_host("www.google.com") == True
+        assert is_known_http2_host("github.com") == True
+        assert is_known_http2_host("api.github.com") == True  # Subdomain
+
+        # Test unknown hosts
+        assert is_known_http2_host("example.com") == False
+        assert is_known_http2_host("unknown-service.org") == False
+
+    def test_calculate_backoff(self):
+        """Test backoff calculation for retries."""
+        # Test first retry (should be between 0 and base_delay)
+        backoff1 = calculate_backoff(retry_count=1, base_delay=0.5)
+        assert 0 <= backoff1 <= 0.5
+
+        # Test second retry (should be between 0 and base_delay*2)
+        backoff2 = calculate_backoff(retry_count=2, base_delay=0.5)
+        assert 0 <= backoff2 <= 1.0
+
+        # Test third retry (should be between 0 and base_delay*4)
+        backoff3 = calculate_backoff(retry_count=3, base_delay=0.5)
+        assert 0 <= backoff3 <= 2.0
+
+        # Test with max_delay (should cap at max_delay)
+        backoff_max = calculate_backoff(retry_count=10, base_delay=0.5, max_delay=5.0)
+        assert 0 <= backoff_max <= 5.0

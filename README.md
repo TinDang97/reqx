@@ -1,410 +1,201 @@
-# Reqx
+# reqx: High-Performance HTTP Client Library
 
-An enhanced HTTP client library built on top of [httpx](https://www.python-httpx.org/) for making custom HTTP requests with async support. This library provides a convenient and powerful API for handling HTTP requests with features like connection pooling, automatic retries, JSON path selectors, and more.
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+reqx is a modern, high-performance HTTP client library for Python, extending [httpx](https://github.com/encode/httpx) with advanced features and optimizations for demanding use cases.
 
-## Features
+## Key Features
 
-- ✅ **Fully asynchronous** HTTP client with `async`/`await` syntax
-- ✅ **Automatic retries** with configurable backoff strategy
-- ✅ **Connection pooling** for optimal performance
-- ✅ **HTTP/2 and HTTP/3 support** for improved performance
-- ✅ **Response caching** with configurable TTL
-- ✅ **Rate limiting** with token bucket algorithm
-- ✅ **Middleware support** for request/response processing
-- ✅ **Batch requests** with concurrency controls
-- ✅ **JSON path selectors** to extract specific data from responses
-- ✅ **Type validation** with Pydantic models
-- ✅ **Advanced error handling** with specific exception types
-- ✅ **Fast JSON serialization** with orjson
-- ✅ **CLI interface** for quick HTTP requests from the terminal
-- ✅ **Security features** with proper SSL/TLS configuration
-- ✅ **Performance optimizations** with uvloop
-- ✅ **Metrics collection** for request performance analysis
+- **Multiple Transport Support:** Switches between httpx and aiohttp for optimal protocol compatibility and speed.
+- **Smart Protocol Selection:** Automatically chooses HTTP/1.1, HTTP/2, or HTTP/3 per request.
+- **Adaptive Timeouts:** Dynamically adjusts timeouts based on request history.
+- **System-Aware Configuration:** Tunes connection pools and networking for your system.
+- **Enhanced Builder Pattern:** Fluent API for configuring clients with preset profiles.
+- **Middleware Pipeline:** Extensible architecture for request/response processing.
+- **Advanced Retries:** Exponential backoff, jitter, and status-based retry policies.
+- **Batch Requests:** Parallel request execution with efficient resource management.
+- **Streaming Support:** Handles large requests/responses efficiently.
+- **GraphQL Integration:** Native support for GraphQL queries.
+- **Webhook Management:** Simple webhook creation and management.
+- **Settings Persistence:** Retains learned optimizations across restarts.
 
 ## Installation
-
-Reqx requires Python 3.8+ and can be installed using `uv`:
-
-```bash
-uv pip install reqx
-```
-
-Or using pip:
 
 ```bash
 pip install reqx
 ```
-
-### Optional Dependencies
-
-To install with optional features:
-
-```bash
-# For Brotli compression support
-pip install reqx[compression]
-
-# For development tools
-pip install reqx[dev]
-
-# For multiple extras
-pip install reqx[compression,dev]
-```
-
-## Benchmark Results
-
-| Client         | Requests | Duration (s) | Req/sec   | Avg Request (ms) | Memory (KB) |
-|----------------|----------|--------------|-----------|------------------|-------------|
-| reqx           | 100      | 0.004        | 24,736.7  | 0.04             | 2,486       |
-| aiohttp        | 100      | 2.286        | 43.87     | 22.86            | 27,882      |
-| httpx          | 100      | 2.599        | 39.67     | 25.99            | 3,416.33    |
-
-**Relative Performance:**
-
-- `reqx` is 99.8% faster than `aiohttp`
-- `reqx` is 99.8% faster than `httpx`
-
-**Memory Efficiency:**
-
-- `reqx` uses 1,021.6% less memory than `aiohttp`
-- `reqx` uses 37.4% less memory than `httpx`
-
-_Results exported to `benchmark_results.json`_
-_*note: no cache applied_
 
 ## Quick Start
 
 ### Basic Usage
 
 ```python
-import asyncio
 from reqx import ReqxClient
 
-async def main():
-    # Create a client
+client = ReqxClient()
+
+# Synchronous request
+response = client.get("https://api.example.com/users")
+print(response.json())
+
+# Asynchronous request
+async def fetch_data():
     async with ReqxClient() as client:
-        # Make a GET request
-        response = await client.get("https://httpbin.org/get")
-        print(f"Status code: {response.status_code}")
-        print(f"Response: {response.json()}")
-
-        # Make a POST request with JSON body
-        post_response = await client.post(
-            "https://httpbin.org/post",
-            json={"name": "John", "age": 30}
-        )
-        print(f"POST response: {post_response.json()}")
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        response = await client.get("https://api.example.com/users")
+        return response.json()
 ```
 
-### Using Response Models
-
-You can automatically parse responses into Pydantic models:
+### Advanced Configuration
 
 ```python
-import asyncio
-from pydantic import BaseModel
-from reqx import ReqxClient
+from reqx import ReqxClientBuilder
 
-class User(BaseModel):
-    id: int
-    name: str
-    email: str
-
-async def main():
-    async with ReqxClient() as client:
-        # Parse response directly into a model
-        user = await client.get(
-            "https://jsonplaceholder.typicode.com/users/1",
-            response_model=User
-        )
-
-        print(f"User: {user.name} ({user.email})")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### JSON Path Selector
-
-Extract specific data from JSON responses using JSONPath syntax:
-
-```python
-import asyncio
-from reqx import ReqxClient, select_json_path
-
-async def main():
-    async with ReqxClient() as client:
-        response = await client.get("https://jsonplaceholder.typicode.com/users")
-        data = response.json()
-
-        # Extract all user emails
-        emails = select_json_path(data, "$[*].email")
-        print("User emails:", emails)
-
-        # Extract nested data
-        companies = select_json_path(data, "$[*].company.name")
-        print("Company names:", companies)
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Error Handling
-
-The library provides detailed exceptions for different error cases:
-
-```python
-import asyncio
-from reqx import ReqxClient
-from reqx.exceptions import (
-    NotFoundError, ServerError, TimeoutError
-)
-
-async def main():
-    async with ReqxClient() as client:
-        try:
-            # This will raise a NotFoundError
-            await client.get("https://httpbin.org/status/404")
-        except NotFoundError as e:
-            print(f"Resource not found: {e}")
-
-        try:
-            # This will raise a ServerError
-            await client.get("https://httpbin.org/status/500")
-        except ServerError as e:
-            print(f"Server error: {e}")
-
-        try:
-            # This will likely raise a TimeoutError
-            await client.get(
-                "https://httpbin.org/delay/10",
-                timeout=2.0
-            )
-        except TimeoutError as e:
-            print(f"Request timed out: {e}")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-## Advanced Configuration
-
-You can configure the client with various options:
-
-```python
-from reqx import ReqxClient
-
-# Create a client with custom configuration
-client = ReqxClient(
-    base_url="https://api.example.com",
-    timeout=30.0,
-    max_connections=100,
-    max_keepalive_connections=20,
-    keepalive_expiry=60,
-    follow_redirects=True,
-    verify_ssl=True,
-    max_retries=3,
-    retry_backoff=0.5,
-    http2=True,
-    enable_http3=False,  # Enable HTTP/3 support
-    debug=False,
-    enable_cache=True,   # Enable response caching
-    cache_ttl=300,       # Cache TTL in seconds
-    rate_limit=100,      # Rate limit (requests per second)
+client = (
+    ReqxClientBuilder()
+    .with_base_url("https://api.example.com")
+    .with_http2(True)
+    .with_adaptive_timeout(True)
+    .for_high_performance()
+    .with_retry(max_retries=3)
+    .with_middleware(LoggingMiddleware())
+    .with_persistence(True)
+    .build()
 )
 ```
 
-### Request Compression
+### Preset Profiles
 
-Enhanced HTTPX supports request compression using various algorithms. For Brotli compression, install the optional dependency:
+```python
+client = ReqxClientBuilder().for_high_performance().build()
+client = ReqxClientBuilder().for_reliability().build()
+client = ReqxClientBuilder().auto_optimize().build()
+```
+
+## Advanced Features
+
+### Hybrid Transport Selection
+
+```python
+client = (
+    ReqxClientBuilder()
+    .use_aiohttp(True)
+    .with_http2(True)
+    .auto_optimize()
+    .build()
+)
+```
+- HTTP/1.1 endpoints use aiohttp (faster for HTTP/1.1)
+- HTTP/2 endpoints use httpx (faster for HTTP/2)
+
+### Adaptive Timeout Management
+
+```python
+client = (
+    ReqxClientBuilder()
+    .with_adaptive_timeout(True)
+    .build()
+)
+```
+Timeouts adjust automatically per host based on performance.
+
+### Settings Persistence
+
+```python
+client = (
+    ReqxClientBuilder()
+    .with_adaptive_timeout(True)
+    .with_persistence(True)
+    .build()
+)
+```
+Settings are saved and reused across runs.
+
+Custom persistence path:
+
+```python
+client = (
+    ReqxClientBuilder()
+    .with_adaptive_timeout(True)
+    .with_persistence(True, "/path/to/settings")
+    .build()
+)
+```
+
+Benchmark persistence:
 
 ```bash
-pip install reqx[compression]
+python -m scripts.benchmark_persistence --url https://api.example.com --iterations 5 --plot
 ```
 
-Then use the CompressionMiddleware:
+### Middleware Pipeline
 
 ```python
-import asyncio
-from reqx import ReqxClient
-from reqx.middleware import CompressionMiddleware, MiddlewareChain
+from reqx import Middleware
 
-async def main():
-    # Create middleware chain with compression
-    middleware = MiddlewareChain()
-    middleware.add(CompressionMiddleware(
-        compress_requests=True,
-        min_size_to_compress=1024,  # Only compress bodies larger than 1KB
-        compress_type="br",  # Use Brotli compression
-        accept_compressed_responses=True
-    ))
+class MyMiddleware(Middleware):
+    async def process_request(self, ctx, next_middleware):
+        ctx.headers["X-Custom"] = "Value"
+        response = await next_middleware(ctx)
+        response.metadata["custom_key"] = "processed"
+        return response
 
-    # Create client with middleware
-    async with ReqxClient() as client:
-        client.middleware = middleware
-
-        # The request body will be automatically compressed
-        response = await client.post(
-            "https://httpbin.org/post",
-            json={"large": "data" * 1000}  # Large enough to trigger compression
-        )
-        print(response.json())
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using Middleware
-
-You can add middleware functions to modify requests before they are sent or responses before they are returned:
-
-```python
-import asyncio
-from reqx import ReqxClient
-
-# Define a request middleware
-async def add_auth_header(method, url, request_kwargs):
-    headers = request_kwargs.get("headers", {})
-    headers["Authorization"] = "Bearer token123"
-    request_kwargs["headers"] = headers
-    return request_kwargs
-
-# Define a response middleware
-async def log_response_time(response):
-    print(f"Request to {response.url} took {response.elapsed.total_seconds():.2f}s")
-    return response
-
-async def main():
-    # Create a client with middleware
-    async with ReqxClient() as client:
-        # Add middleware
-        client.add_request_middleware(add_auth_header)
-        client.add_response_middleware(log_response_time)
-
-        # Make a request - middleware will be applied
-        response = await client.get("https://httpbin.org/get")
-        print(response.json())
-
-if __name__ == "__main__":
-    asyncio.run(main())
+client = ReqxClientBuilder().with_middleware(MyMiddleware()).build()
 ```
 
 ### Batch Requests
 
-Process multiple requests concurrently with batch mode:
+```python
+responses = await client.batch_request([
+    {"method": "GET", "url": "https://api.example.com/users/1"},
+    {"method": "GET", "url": "https://api.example.com/users/2"},
+    {"method": "POST", "url": "https://api.example.com/data", "json": {"key": "value"}}
+])
+
+for resp in responses:
+    print(f"Status: {resp.status_code}, Data: {resp.json()}")
+```
+
+### GraphQL Integration
 
 ```python
-import asyncio
-from reqx import ReqxClient, BatchRequestItem
+response = await client.graphql(
+    "https://api.example.com/graphql",
+    query="""
+    query GetUser($id: ID!) {
+        user(id: $id) {
+            id
+            name
+            email
+        }
+    }
+    """,
+    variables={"id": "123"}
+)
 
-async def main():
-    async with ReqxClient() as client:
-        # Create a batch of requests
-        batch = client.create_batch()
-
-        # Add requests to the batch
-        batch.add_request("GET", "https://httpbin.org/get")
-        batch.add_request("POST", "https://httpbin.org/post", json={"name": "John"})
-        batch.add_request("GET", "https://httpbin.org/delay/1")
-
-        # Execute all requests concurrently (with max_connections limit)
-        responses = await client.execute_batch(batch, max_connections=5)
-
-        # Process responses
-        for i, response in enumerate(responses):
-            print(f"Response {i+1} status: {response.status_code}")
-
-if __name__ == "__main__":
-    asyncio.run(main())
+user_data = response.json()["data"]["user"]
 ```
 
-### Caching Responses
+## Contributing
 
-Configure caching for repeated requests:
-
-```python
-import asyncio
-from reqx import ReqxClient
-
-async def main():
-    # Enable caching with 60 second TTL
-    async with ReqxClient(enable_cache=True, cache_ttl=60) as client:
-        # First request will be sent to server
-        response1 = await client.get("https://httpbin.org/get")
-        print("First request:", response1.elapsed.total_seconds())
-
-        # Second request will use cached response (much faster)
-        response2 = await client.get("https://httpbin.org/get")
-        print("Second request (cached):", response2.elapsed.total_seconds())
-
-        # Force refresh cache for this request
-        response3 = await client.get("https://httpbin.org/get", force_refresh=True)
-        print("Third request (forced refresh):", response3.elapsed.total_seconds())
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-## Command Line Interface
-
-Enhanced HTTPX comes with a CLI for making HTTP requests from the terminal:
-
-```bash
-# Basic GET request
-reqx get https://httpbin.org/get
-
-# POST with JSON data
-reqx post https://httpbin.org/post -j '{"name": "John", "age": 30}'
-
-# Custom headers and parameters
-reqx get https://httpbin.org/get -H "Authorization=Bearer token123" -p "query=test"
-
-# Extract specific data with JSONPath
-reqx get https://jsonplaceholder.typicode.com/users --json-path "$[*].email"
-
-# Save response to file
-reqx get https://httpbin.org/json --pretty --save response.json
-
-# Debug mode
-reqx --debug get https://httpbin.org/headers
-```
-
-## Performance
-
-Enhanced HTTPX is designed for performance:
-
-- Uses `uvloop` for an optimized event loop implementation
-- Fast JSON serialization/deserialization with `orjson`
-- Efficient connection pooling
-- Smart retry mechanisms
-
-You can run the benchmark script to compare performance with other HTTP clients:
-
-```bash
-python scripts/benchmark.py
-```
-
-## Development
-
-To set up the development environment:
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/reqx.git
-cd reqx
-
-# Install the package in development mode
-uv pip install -e ".[dev]"
-
-# Run tests
-python scripts/run_tests.py
-```
+Contributions are welcome! See the [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Experiment
+
+Running batch benchmarks against http://localhost:80
+Batch size: 100
+HTTP method: GET
+Concurrent requests: 10000
+Runs per client: 3
+Clients: reqx, httpx, aiohttp
+
+| Client        | Requests | Duration (s) | Req/sec | Avg Request (ms) | Memory (KB) |
+|---------------|----------|--------------|---------|------------------|-------------|
+| aiohttp_batch |   10000  |    6.38      | 1567.53 | 0.64             | 3807.67     |
+| reqx_batch    |   10000  |    7.915     | 1271.68 | 0.79             | 4872.33     |
+| httpx_batch   |   10000  |   26.264     | 382.02  | 2.63             | 5777.67     |
+

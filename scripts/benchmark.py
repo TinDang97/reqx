@@ -30,7 +30,7 @@ from src import ReqxClient
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 # Default settings
-DEFAULT_URL = "http://0.0.0.0:80"
+DEFAULT_URL = "http://0.0.0.0:80/"
 DEFAULT_CONCURRENT_REQUESTS = 100
 DEFAULT_RUNS = 3
 

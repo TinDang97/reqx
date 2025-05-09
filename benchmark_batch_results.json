@@ -1,29 +1,29 @@
 [
   {
     "client": "aiohttp_batch",
-    "requests": 1000,
-    "duration_seconds": 0.679,
-    "requests_per_second": 1480.23,
-    "avg_request_time_ms": 0.68,
-    "memory_usage_kb": 1910.6666666666667,
-    "timestamp": "2025-05-09T15:44:38.373151"
+    "requests": 10000,
+    "duration_seconds": 6.38,
+    "requests_per_second": 1567.53,
+    "avg_request_time_ms": 0.64,
+    "memory_usage_kb": 3807.6666666666665,
+    "timestamp": "2025-05-10T00:04:37.224688"
   },
   {
     "client": "reqx_batch",
-    "requests": 1000,
-    "duration_seconds": 2.372,
-    "requests_per_second": 421.6,
-    "avg_request_time_ms": 2.37,
-    "memory_usage_kb": 3951.3333333333335,
-    "timestamp": "2025-05-09T15:44:29.071307"
+    "requests": 10000,
+    "duration_seconds": 7.915,
+    "requests_per_second": 1271.68,
+    "avg_request_time_ms": 0.79,
+    "memory_usage_kb": 4872.333333333333,
+    "timestamp": "2025-05-10T00:02:59.223552"
   },
   {
     "client": "httpx_batch",
-    "requests": 1000,
-    "duration_seconds": 2.403,
-    "requests_per_second": 416.2,
-    "avg_request_time_ms": 2.4,
-    "memory_usage_kb": 2938,
-    "timestamp": "2025-05-09T15:44:36.315136"
+    "requests": 10000,
+    "duration_seconds": 26.264,
+    "requests_per_second": 382.02,
+    "avg_request_time_ms": 2.63,
+    "memory_usage_kb": 5777.666666666667,
+    "timestamp": "2025-05-10T00:04:18.059472"
   }
 ]

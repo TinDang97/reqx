@@ -5,16 +5,18 @@ import logging
 import os
 import ssl
 import time
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, TypeVar, Union
-from urllib.parse import urljoin
+from pydantic import TypeAdapter
 
-from httpx import AsyncClient, Limits, Response, Timeout, TransportError
-from pydantic import BaseModel, Field, TypeAdapter
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, TypeVar, Union
+from urllib.parse import urljoin, urlparse
+
+from httpx import Response, Timeout, TransportError
 
 from .exceptions import MiddlewareError, RequestError, ResponseError, SecurityError
+from .transport import AiohttpTransport, BaseTransport, HttpxTransport, HybridTransport
 from .utils import log_request, log_response
 
-logger = logging.getLogger("httpx")
+logger = logging.getLogger("reqx")
 # Set up logging
 logging.basicConfig(level=logging.WARNING)
 
@@ -114,19 +116,6 @@ class RateLimiter:
         self.tokens = min(self.max_tokens, self.tokens + new_tokens)
 
 
-class RequestModel(BaseModel):
-    url: str
-    method: str = Field(default="GET")
-    headers: Optional[Dict[str, str]] = Field(default_factory=dict)
-    cookies: Optional[Dict[str, str]] = Field(default_factory=dict)
-    params: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    body: Optional[Any] = None
-    json_data: Optional[Dict[str, Any]] = None
-    timeout: Optional[float] = None
-    follow_redirects: bool = True
-    verify_ssl: bool = True
-
-
 class CertificatePinner:
     """Certificate pinning for enhanced security against MITM attacks."""
 
@@ -206,15 +195,224 @@ class CertificatePinner:
         )
 
 
-class ReqxClient:
+class AdaptiveTimeoutManager:
     """
-    A high-performance HTTP client built on top of httpx with additional features
-    for performance, security, and usability.
+    Manages timeout settings adaptively based on host performance history.
+
+    This class tracks request durations for different hosts and adjusts
+    timeout settings accordingly to optimize reliability and performance.
     """
 
     def __init__(
         self,
-        base_url: str = "",
+        default_timeout: float = 30.0,
+        min_timeout: float = 1.0,
+        max_timeout: float = 120.0,
+        persistence_enabled: bool = False,
+        persistence_path: Optional[str] = None,
+    ):
+        """
+        Initialize the adaptive timeout manager.
+
+        Args:
+            default_timeout: Default timeout in seconds for new hosts
+            min_timeout: Minimum allowed timeout value
+            max_timeout: Maximum allowed timeout value
+            persistence_enabled: Whether to persist settings to disk
+            persistence_path: Optional custom path for saving settings
+        """
+        self.default_timeout = default_timeout
+        self.min_timeout = min_timeout
+        self.max_timeout = max_timeout
+        self.persistence_enabled = persistence_enabled
+
+        # Host performance tracking
+        self.host_metrics = {}
+
+        # Statistical parameters
+        self.percentile_threshold = 95  # Use 95th percentile for timeout calculation
+        self.sample_size = 50  # Minimum samples needed for adaptation
+        self.safety_factor = 1.5  # Multiply the percentile by this factor for safety
+
+        # Initialize persistence if enabled
+        if persistence_enabled:
+            from .persistence import SettingsPersistence
+
+            self.persistence = SettingsPersistence(storage_path=persistence_path)
+            self._load_persisted_settings()
+        else:
+            self.persistence = None
+
+    def _load_persisted_settings(self) -> None:
+        """Load saved timeout settings from disk if available."""
+        if not self.persistence_enabled or not self.persistence:
+            return
+
+        loaded_settings = self.persistence.load_timeout_settings()
+        if loaded_settings:
+            # Merge loaded settings with our current settings
+            for host, metrics in loaded_settings.items():
+                if host not in self.host_metrics:
+                    self.host_metrics[host] = metrics
+
+    def _save_settings(self) -> None:
+        """Save current timeout settings to disk."""
+        if not self.persistence_enabled or not self.persistence:
+            return
+
+        self.persistence.save_timeout_settings(self.host_metrics)
+
+    def record_request(self, host: str, duration: float, success: bool):
+        """
+        Record the performance of a request to a given host.
+
+        Args:
+            host: Hostname of the request
+            duration: Time taken for the request to complete (in seconds)
+            success: Whether the request completed successfully
+        """
+        if host not in self.host_metrics:
+            self.host_metrics[host] = {
+                "durations": [],
+                "timeout_history": [self.default_timeout],
+                "successes": 0,
+                "failures": 0,
+                "timeouts": 0,
+                "current_timeout": self.default_timeout,
+            }
+
+        metrics = self.host_metrics[host]
+
+        # Update durations list (keep last 100 samples)
+        metrics["durations"].append(duration)
+        if len(metrics["durations"]) > 100:
+            metrics["durations"].pop(0)
+
+        # Update success/failure counts
+        if success:
+            metrics["successes"] += 1
+        else:
+            metrics["failures"] += 1
+
+        # Periodically save settings if we have enough data
+        if self.persistence_enabled and (metrics["successes"] + metrics["failures"]) % 20 == 0:
+            self._save_settings()
+
+    def record_timeout(self, host: str):
+        """
+        Record a timeout for a specific host.
+
+        Args:
+            host: Hostname that experienced the timeout
+        """
+        if host not in self.host_metrics:
+            self.host_metrics[host] = {
+                "durations": [],
+                "timeout_history": [self.default_timeout],
+                "successes": 0,
+                "failures": 0,
+                "timeouts": 0,
+                "current_timeout": self.default_timeout,
+            }
+
+        self.host_metrics[host]["timeouts"] += 1
+
+        # Save settings immediately after a timeout
+        if self.persistence_enabled:
+            self._save_settings()
+
+    def get_timeout(self, host: str) -> float:
+        """
+        Get the optimal timeout for a given host based on historical performance.
+
+        Args:
+            host: Hostname to get timeout for
+
+        Returns:
+            Recommended timeout in seconds
+        """
+        # If we don't have data for this host, use default timeout
+        if host not in self.host_metrics:
+            return self.default_timeout
+
+        metrics = self.host_metrics[host]
+
+        # If we don't have enough samples, use current timeout
+        if len(metrics["durations"]) < self.sample_size:
+            return metrics["current_timeout"]
+
+        # Calculate the percentile of request durations
+        durations = sorted(metrics["durations"])
+        idx = int(len(durations) * (self.percentile_threshold / 100))
+        percentile_duration = durations[idx]
+
+        # Calculate timeout based on percentile and safety factor
+        calculated_timeout = percentile_duration * self.safety_factor
+
+        # Factor in timeout history
+        if metrics["timeouts"] > 0:
+            # If we've had timeouts, be more conservative
+            timeout_ratio = metrics["timeouts"] / (metrics["successes"] + 1)
+            if timeout_ratio > 0.05:  # More than 5% of requests are timing out
+                calculated_timeout *= 1 + timeout_ratio
+
+        # Enforce minimum and maximum timeouts
+        final_timeout = max(self.min_timeout, min(calculated_timeout, self.max_timeout))
+
+        # Update the timeout history
+        metrics["timeout_history"].append(final_timeout)
+        if len(metrics["timeout_history"]) > 10:
+            metrics["timeout_history"].pop(0)
+
+        # Update current timeout (using exponential moving average to smooth changes)
+        metrics["current_timeout"] = 0.7 * final_timeout + 0.3 * metrics["current_timeout"]
+
+        # Periodically save settings when we calculate a new timeout
+        if self.persistence_enabled and len(metrics["timeout_history"]) % 5 == 0:
+            self._save_settings()
+
+        return metrics["current_timeout"]
+
+    def get_statistics(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get statistics about managed timeouts.
+
+        Returns:
+            Dictionary with timeout statistics per host
+        """
+        stats = {}
+        for host, metrics in self.host_metrics.items():
+            if len(metrics["durations"]) > 0:
+                stats[host] = {
+                    "current_timeout": metrics["current_timeout"],
+                    "avg_duration": sum(metrics["durations"]) / len(metrics["durations"]),
+                    "max_duration": max(metrics["durations"]),
+                    "min_duration": min(metrics["durations"]),
+                    "samples": len(metrics["durations"]),
+                    "success_rate": metrics["successes"]
+                    / (metrics["successes"] + metrics["failures"] + 0.001),
+                    "timeout_rate": metrics["timeouts"]
+                    / (metrics["successes"] + metrics["failures"] + metrics["timeouts"] + 0.001),
+                }
+        return stats
+
+    def save_settings(self) -> None:
+        """Explicitly save current settings to disk."""
+        if self.persistence_enabled:
+            self._save_settings()
+
+
+class ReqxClient:
+    """
+    A high-performance HTTP client with automatic protocol selection.
+
+    Uses aiohttp for HTTP/1.0 and HTTP/1.1 (better performance)
+    Uses httpx for HTTP/2 and HTTP/3 (better feature support)
+    """
+
+    def __init__(
+        self,
+        base_url: str | None = None,
         headers: Dict[str, str] | None = None,
         cookies: Dict[str, str] | None = None,
         timeout: float = 30.0,
@@ -226,13 +424,18 @@ class ReqxClient:
         max_retries: int = 3,
         retry_backoff: float = 0.5,
         http2: bool = False,
-        enable_http3: bool = False,  # New HTTP/3 support option
+        enable_http3: bool = False,
         debug: bool = False,
-        enable_cache: bool = False,  # Enable response caching
-        cache_ttl: int = 300,  # Default cache TTL in seconds
-        rate_limit: Optional[float] = None,  # Requests per second
-        rate_limit_max_tokens: int = 60,  # Maximum rate limit tokens
-        certificate_pins: Dict[str, List[str]] | None = None,  # Certificate pinning configuration
+        enable_cache: bool = False,
+        cache_ttl: int = 300,
+        rate_limit: Optional[float] = None,
+        rate_limit_max_tokens: int = 60,
+        certificate_pins: Dict[str, List[str]] | None = None,
+        use_aiohttp: bool = True,
+        adaptive_timeout: bool = False,  # Whether to use adaptive timeouts
+        persistence_enabled: bool = False,  # Whether to persist settings
+        persistence_path: Optional[str] = None,  # Custom path for persisted settings
+        transport_learning: bool = False,  # Whether to enable intelligent transport selection
     ):
         """
         Initialize the ReqxClient with custom configuration.
@@ -258,6 +461,12 @@ class ReqxClient:
             rate_limit_max_tokens: Maximum tokens for rate limiting
             certificate_pins:
                 Dictionary mapping hostnames to lists of base64-encoded SHA-256 certificate hashes
+            use_aiohttp:
+                Whether to use aiohttp for HTTP/1.1 requests (better performance)
+            adaptive_timeout: Whether to dynamically adjust timeouts based on host performance
+            persistence_enabled: Whether to persist settings
+            persistence_path: Custom path for persisted settings
+            transport_learning: Whether to enable intelligent transport selection
         """
         self.base_url = base_url
         self.default_headers = headers or {}
@@ -299,48 +508,46 @@ class ReqxClient:
             logging.basicConfig(level=logging.DEBUG)
             logger.setLevel(logging.DEBUG)
 
-        # Configure SSL
-        self.ssl_context = ssl.create_default_context()
-        if not verify_ssl:
-            self.ssl_context.check_hostname = False
-            self.ssl_context.verify_mode = ssl.CERT_NONE
-
-        # Configure connection pooling
-        limits = Limits(
-            max_connections=max_connections,
-            max_keepalive_connections=max_keepalive_connections,
-            keepalive_expiry=keepalive_expiry,
-        )
-
-        # Initialize the client with HTTP/2 or HTTP/3 if enabled
-        client_kwargs = {
+        # Create the appropriate transport based on configuration
+        transport_args = {
             "base_url": base_url,
             "headers": headers,
             "cookies": cookies,
-            "timeout": Timeout(timeout),
+            "timeout": timeout,
+            "max_connections": max_connections,
+            "max_keepalive_connections": max_keepalive_connections,
+            "keepalive_expiry": keepalive_expiry,
             "follow_redirects": follow_redirects,
-            "verify": verify_ssl,
-            "limits": limits,
+            "verify_ssl": verify_ssl,
             "http2": http2,
+            "enable_http3": enable_http3,
         }
 
-        if enable_http3:
-            try:
-                # TODO: Check if httpx_h3 is installed
-                # Import HTTP/3 support if available
-                from httpx_h3 import H3Transport  # type: ignore[import]
-
-                client_kwargs["transport"] = H3Transport()
-                logger.debug("HTTP/3 (QUIC) support enabled")
-            except ImportError:
-                logger.warning(
-                    "HTTP/3 requested but httpx_h3 not installed. Falling back to HTTP/1.1/HTTP/2"
-                )
-
-        self.client = AsyncClient(**client_kwargs)
+        # Choose the transport implementation
+        if http2 or enable_http3:
+            # For HTTP/2 or HTTP/3, always use httpx
+            self.transport = HttpxTransport(**transport_args)
+        elif use_aiohttp:
+            # Use the hybrid transport which will select the best option per request
+            hybrid_args = {**transport_args, "transport_learning": transport_learning}
+            self.transport = HybridTransport(**hybrid_args)
+        else:
+            # Use httpx for everything if specifically requested
+            self.transport = HttpxTransport(**transport_args)
 
         # Initialize certificate pinner if pins are provided
         self.certificate_pinner = CertificatePinner(certificate_pins)
+
+        # Initialize adaptive timeout manager if enabled
+        self.adaptive_timeout = adaptive_timeout
+        if adaptive_timeout:
+            self.timeout_manager = AdaptiveTimeoutManager(
+                default_timeout=timeout,
+                persistence_enabled=persistence_enabled,
+                persistence_path=persistence_path,
+            )
+        else:
+            self.timeout_manager = None
 
     async def __aenter__(self):
         return self
@@ -478,11 +685,11 @@ class ReqxClient:
         files: Dict[str, Any] | None = None,
         timeout: float | None = None,
         follow_redirects: bool | None = None,
-        verify_ssl: bool | None = None,
         response_model: Type[T] | None = None,
         stream: bool = False,
         cache: bool | None = None,
         cache_ttl: int | None = None,
+        force_http2: bool = False,
     ) -> Union[Response, T, None]:
         """
         Send an HTTP request with retry logic and proper error handling.
@@ -503,12 +710,22 @@ class ReqxClient:
             stream: Whether to enable streaming response (for large downloads)
             cache: Whether to use cache for this request (overrides client setting)
             cache_ttl: Custom TTL for this cached response in seconds
+            force_http2: Force the use of HTTP/2 for this request
 
         Returns:
             Response object or parsed model instance if response_model is provided
         """
         start_time = time.time()
         self.metrics["requests_sent"] += 1
+
+        # Extract host from URL for adaptive timeouts
+        parsed_url = urlparse(url)
+        host = parsed_url.netloc.split(":")[0]
+
+        # Apply adaptive timeout if enabled and no specific timeout was provided
+        if self.adaptive_timeout and self.timeout_manager and timeout is None:
+            adaptive_timeout = self.timeout_manager.get_timeout(host)
+            timeout = adaptive_timeout
 
         # Apply rate limiting if enabled
         if self.rate_limiter:
@@ -547,6 +764,7 @@ class ReqxClient:
             "files": files,
             "timeout": _timeout,
             "follow_redirects": _follow_redirects,
+            "force_http2": force_http2,  # Pass through the HTTP/2 flag
         }
 
         # Generate cache key if the request is cacheable
@@ -584,9 +802,17 @@ class ReqxClient:
 
         # Retry loop
         while retry_count <= self.max_retries:
+            request_start_time = time.time()
             try:
                 # Make the request (with or without streaming)
-                response = await self.client.request(method=method, url=full_url, **kwargs)
+                # Use our transport layer which handles HTTP protocol selection
+                response = await self.transport.request(method=method, url=full_url, **kwargs)
+
+                request_duration = time.time() - request_start_time
+
+                # Record successful request for adaptive timeout
+                if self.adaptive_timeout and self.timeout_manager:
+                    self.timeout_manager.record_request(host, request_duration, success=True)
 
                 if self.debug:
                     log_response(response)
@@ -602,9 +828,9 @@ class ReqxClient:
 
                 # Check if the response indicates an error
                 response.raise_for_status()
+
                 # Store in cache if cacheable and not streaming
                 if cacheable and not stream and cache_key is not None:
-                    self._store_in_cache(cache_key, response, cache_ttl)
                     self._store_in_cache(cache_key, response, cache_ttl)
 
                 # Parse to response model if one was provided
@@ -625,6 +851,17 @@ class ReqxClient:
                 return response
 
             except TransportError as e:
+                # Check if it's a timeout
+                is_timeout = "timeout" in str(e).lower() or "timed out" in str(e).lower()
+                request_duration = time.time() - request_start_time
+
+                # Record metrics for adaptive timeout
+                if self.adaptive_timeout and self.timeout_manager:
+                    if is_timeout:
+                        self.timeout_manager.record_timeout(host)
+                    else:
+                        self.timeout_manager.record_request(host, request_duration, success=False)
+
                 # Network-related errors are retryable
                 retry_count += 1
                 self.metrics["retry_attempts"] += 1
@@ -719,8 +956,8 @@ class ReqxClient:
 
     async def close(self):
         """Close the client session."""
-        if self.client:
-            await self.client.aclose()
+        if hasattr(self, "transport"):
+            await self.transport.close()
 
     def clear_cache(self, url_pattern: Optional[str] = None):
         """
@@ -853,7 +1090,6 @@ class ReqxClient:
             List of parsed model instances or exceptions
         """
         responses = await self.batch(requests, max_concurrency, raise_exceptions, progress_callback)
-
         results = []
         adapter = TypeAdapter(response_model)
 
@@ -916,7 +1152,9 @@ class ReqxClient:
             List of responses or exceptions in the same order as the requests
         """
         semaphore = asyncio.Semaphore(concurrency_limit)
-        results = [None] * len(requests)  # Pre-allocate the results list
+        results: List[None | Response | Exception | Any] = [None] * len(
+            requests
+        )  # Pre-allocate the results list
 
         async def _process_request(index: int, req_config: dict):
             req_method = req_config.pop("method", "GET")
@@ -937,8 +1175,10 @@ class ReqxClient:
                     if self.rate_limiter:
                         await self.rate_limiter.acquire()
 
-                    # Make the actual request
-                    response = await self.client.request(method=req_method, url=full_url, **kwargs)
+                    # Make the actual request using our transport layer
+                    response = await self.transport.request(
+                        method=req_method, url=full_url, **kwargs
+                    )
 
                     # Process response middleware
                     if self.response_middlewares:
@@ -1001,3 +1241,25 @@ class ReqxClient:
         """
         requests = [{"method": "GET", "url": url, **kwargs} for url in urls]
         return await self.batch_request(requests, concurrency_limit, response_model)
+
+    def get_timeout_statistics(self) -> Dict[str, Any]:
+        """
+        Get statistics about adaptive timeouts if enabled.
+
+        Returns:
+            Dictionary with timeout statistics or empty dict if adaptive timeouts are disabled
+        """
+        if self.adaptive_timeout and self.timeout_manager:
+            return self.timeout_manager.get_statistics()
+        return {}
+
+    def get_transport_metrics(self) -> Dict[str, Any]:
+        """
+        Get metrics about transport usage and performance.
+
+        Returns:
+            Dictionary with transport metrics or empty dict if the transport doesn't support metrics
+        """
+        if hasattr(self.transport, "get_metrics"):
+            return self.transport.get_metrics()
+        return {}
