@@ -191,25 +191,215 @@ async def benchmark_aiohttp(
     )
 
 
-async def run_single_benchmark(client_type, url, requests, method, headers, params, json_data):
+async def benchmark_reqx_batch(
+    url, total_requests, batch_size, method="get", headers=None, params=None, json_data=None
+):
+    """Benchmark the reqx client using batch requests."""
+    # Start memory tracking
+    gc.collect()
+    tracemalloc.start()
+
+    # Prepare batch requests
+    batch_requests = []
+    for _ in range(total_requests):
+        req_data = {
+            "url": url,
+            "method": method,
+        }
+        if headers:
+            req_data["headers"] = headers
+        if params:
+            req_data["params"] = params
+        if json_data and method in ["post", "put"]:
+            req_data["json"] = json_data
+        batch_requests.append(req_data)
+
+    # Split into batches
+    request_batches = [
+        batch_requests[i : i + batch_size] for i in range(0, len(batch_requests), batch_size)
+    ]
+
+    async with ReqxClient() as client:
+        start = time.time()
+
+        remaining = total_requests
+        while remaining > 0:
+            remaining -= batch_size
+            batch = request_batches.pop(0)
+            tasks = client.batch(batch, max_concurrency=batch_size)
+
+            try:
+                await asyncio.gather(tasks)
+            except Exception as e:
+                print(f"Error during reqx batch benchmark: {str(e)}")
+                raise e
+
+        end = time.time()
+        duration = end - start
+
+    # Get memory usage and stop tracking
+    current, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
+    return BenchmarkResult(
+        name="reqx_batch",
+        requests=total_requests,
+        duration=duration,
+        req_per_sec=total_requests / duration,
+        avg_req_time=duration / total_requests,
+        memory_usage=peak // 1024,  # Convert to KB
+    )
+
+
+async def benchmark_httpx_batch(
+    url, total_requests, batch_size, method="get", headers=None, params=None, json_data=None
+):
+    """Benchmark the standard httpx client with concurrent requests (simulating batch)."""
+    # Start memory tracking
+    gc.collect()
+    tracemalloc.start()
+
+    async with httpx.AsyncClient() as client:
+        start = time.time()
+
+        # Process in batch-sized chunks to simulate batching
+        remaining = total_requests
+        while remaining > 0:
+            current_batch = min(batch_size, remaining)
+            tasks = []
+            for _ in range(current_batch):
+                if method == "get":
+                    tasks.append(client.get(url, headers=headers, params=params))
+                elif method == "post":
+                    tasks.append(client.post(url, headers=headers, params=params, json=json_data))
+                elif method == "put":
+                    tasks.append(client.put(url, headers=headers, params=params, json=json_data))
+                elif method == "delete":
+                    tasks.append(client.delete(url, headers=headers, params=params))
+
+            try:
+                await asyncio.gather(*tasks)
+            except Exception as e:
+                print(f"Error during httpx batch benchmark: {str(e)}")
+
+            remaining -= current_batch
+
+        end = time.time()
+        duration = end - start
+
+    # Get memory usage and stop tracking
+    current, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
+    return BenchmarkResult(
+        name="httpx_batch",
+        requests=total_requests,
+        duration=duration,
+        req_per_sec=total_requests / duration,
+        avg_req_time=duration / total_requests,
+        memory_usage=peak // 1024,  # Convert to KB
+    )
+
+
+async def benchmark_aiohttp_batch(
+    url, total_requests, batch_size, method="get", headers=None, params=None, json_data=None
+):
+    """Benchmark the aiohttp client with concurrent requests (simulating batch)."""
+    # Start memory tracking
+    gc.collect()
+    tracemalloc.start()
+
+    async with aiohttp.ClientSession() as session:
+        start = time.time()
+
+        # Process in batch-sized chunks to simulate batching
+        remaining = total_requests
+        while remaining > 0:
+            current_batch = min(batch_size, remaining)
+            tasks = []
+            for _ in range(current_batch):
+                if method == "get":
+                    tasks.append(session.get(url, headers=headers, params=params))
+                elif method == "post":
+                    tasks.append(session.post(url, headers=headers, params=params, json=json_data))
+                elif method == "put":
+                    tasks.append(session.put(url, headers=headers, params=params, json=json_data))
+                elif method == "delete":
+                    tasks.append(session.delete(url, headers=headers, params=params))
+
+            try:
+                responses = await asyncio.gather(*tasks)
+                # Ensure bodies are read to match behavior of other clients
+                for resp in responses:
+                    await resp.text()
+            except Exception as e:
+                print(f"Error during aiohttp batch benchmark: {str(e)}")
+
+            remaining -= current_batch
+
+        end = time.time()
+        duration = end - start
+
+    # Get memory usage and stop tracking
+    current, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
+    return BenchmarkResult(
+        name="aiohttp_batch",
+        requests=total_requests,
+        duration=duration,
+        req_per_sec=total_requests / duration,
+        avg_req_time=duration / total_requests,
+        memory_usage=peak // 1024,  # Convert to KB
+    )
+
+
+async def run_single_benchmark(
+    client_type, url, requests, method, headers, params, json_data, batch_mode=False, batch_size=10
+):
     """Run a single benchmark for a specific client."""
-    if client_type == "reqx":
-        return await benchmark_reqx(url, requests, method, headers, params, json_data)
-    elif client_type == "httpx":
-        return await benchmark_httpx(url, requests, method, headers, params, json_data)
-    elif client_type == "aiohttp":
-        return await benchmark_aiohttp(url, requests, method, headers, params, json_data)
+    if batch_mode:
+        if client_type == "reqx":
+            return await benchmark_reqx_batch(
+                url, requests, batch_size, method, headers, params, json_data
+            )
+        elif client_type == "httpx":
+            return await benchmark_httpx_batch(
+                url, requests, batch_size, method, headers, params, json_data
+            )
+        elif client_type == "aiohttp":
+            return await benchmark_aiohttp_batch(
+                url, requests, batch_size, method, headers, params, json_data
+            )
     else:
-        raise ValueError(f"Unknown client type: {client_type}")
+        if client_type == "reqx":
+            return await benchmark_reqx(url, requests, method, headers, params, json_data)
+        elif client_type == "httpx":
+            return await benchmark_httpx(url, requests, method, headers, params, json_data)
+        elif client_type == "aiohttp":
+            return await benchmark_aiohttp(url, requests, method, headers, params, json_data)
+        else:
+            raise ValueError(f"Unknown client type: {client_type}")
 
 
 async def run_benchmarks(
-    url, concurrent_requests, runs, clients, method, headers, params, json_data
+    url,
+    concurrent_requests,
+    runs,
+    clients,
+    method,
+    headers,
+    params,
+    json_data,
+    batch_mode=False,
+    batch_size=10,
 ):
     """Run all benchmarks."""
     results = []
 
-    print(f"Running benchmarks against {url}")
+    print(f"Running {'batch' if batch_mode else 'standard'} benchmarks against {url}")
+    if batch_mode:
+        print(f"Batch size: {batch_size}")
     print(f"HTTP method: {method.upper()}")
     print(f"Concurrent requests: {concurrent_requests}")
     print(f"Runs per client: {runs}")
@@ -218,12 +408,21 @@ async def run_benchmarks(
 
     for client in clients:
         client_results = []
-        print(f"Benchmarking {client}...")
+        client_name = f"{client}{'_batch' if batch_mode else ''}"
+        print(f"Benchmarking {client_name}...")
 
         for i in range(1, runs + 1):
             print(f"  Run {i}/{runs}...")
             result = await run_single_benchmark(
-                client, url, concurrent_requests, method, headers, params, json_data
+                client,
+                url,
+                concurrent_requests,
+                method,
+                headers,
+                params,
+                json_data,
+                batch_mode,
+                batch_size,
             )
             client_results.append(result)
 
@@ -239,7 +438,7 @@ async def run_benchmarks(
 
         results.append(
             BenchmarkResult(
-                name=client,
+                name=client_name,
                 requests=concurrent_requests,
                 duration=avg_duration,
                 req_per_sec=avg_req_per_sec,
@@ -361,6 +560,12 @@ def parse_args():
     parser.add_argument(
         "--output-file", help="Output filename for exported results (default: auto-generated)"
     )
+    parser.add_argument(
+        "--batch", action="store_true", help="Run in batch mode to test batched requests"
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=10, help="Size of request batches (default: 10)"
+    )
 
     return parser.parse_args()
 
@@ -388,6 +593,8 @@ async def main():
             None,  # headers
             None,  # params
             json_data,
+            args.batch,  # batch_mode
+            args.batch_size,  # batch_size
         )
 
         print_results(results)

@@ -1,0 +1,29 @@
+[
+  {
+    "client": "aiohttp_batch",
+    "requests": 100,
+    "duration_seconds": 7.53,
+    "requests_per_second": 13.59,
+    "avg_request_time_ms": 75.3,
+    "memory_usage_kb": 5917.333333333333,
+    "timestamp": "2025-05-09T15:16:19.373247"
+  },
+  {
+    "client": "reqx_batch",
+    "requests": 100,
+    "duration_seconds": 8.334,
+    "requests_per_second": 12.15,
+    "avg_request_time_ms": 83.34,
+    "memory_usage_kb": 2064.3333333333335,
+    "timestamp": "2025-05-09T15:15:29.634070"
+  },
+  {
+    "client": "httpx_batch",
+    "requests": 100,
+    "duration_seconds": 8.992,
+    "requests_per_second": 11.15,
+    "avg_request_time_ms": 89.92,
+    "memory_usage_kb": 1121,
+    "timestamp": "2025-05-09T15:15:56.716688"
+  }
+]

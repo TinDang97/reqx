@@ -525,7 +525,6 @@ class ReqxClient:
         _follow_redirects = (
             follow_redirects if follow_redirects is not None else self.follow_redirects
         )
-        _verify_ssl = verify_ssl if verify_ssl is not None else self.verify_ssl
 
         # Prepare the URL
         full_url = self._prepare_url(url)
@@ -543,7 +542,6 @@ class ReqxClient:
             "files": files,
             "timeout": _timeout,
             "follow_redirects": _follow_redirects,
-            "verify": _verify_ssl,
         }
 
         # Generate cache key if the request is cacheable
