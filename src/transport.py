@@ -136,6 +136,40 @@ class HttpxTransport(BaseTransport):
         """Check if this transport supports HTTP/3."""
         return self._http3_enabled
 
+    def get_metrics_summary(self) -> Dict[str, Any]:
+        """
+        Get a summary of transport performance metrics.
+
+        Returns:
+            Dictionary with basic metrics (since HttpxTransport doesn't track metrics)
+        """
+        return {
+            "transports": {
+                "httpx": {
+                    "requests": 0,
+                    "avg_time": 0,
+                    "min_time": None,
+                    "max_time": 0,
+                    "error_rate": 0,
+                }
+            },
+            "hosts_analyzed": 0,
+            "transport_preferences": {"httpx": 0, "aiohttp": 0, "unknown": 0},
+        }
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """
+        Get detailed metrics about transport usage and performance.
+
+        Returns:
+            Dictionary with minimal metrics information (since HttpxTransport doesn't track metrics)
+        """
+        return {
+            "total_requests": 0,
+            "transports": {"httpx": {"requests": 0, "errors": 0, "avg_time": 0}},
+            "hosts_analyzed": 0,
+        }
+
 
 class AiohttpTransport(BaseTransport):
     """Transport implementation using aiohttp for better HTTP/1.1 performance."""
@@ -620,8 +654,9 @@ class HybridTransport(BaseTransport):
         # First, try an HTTP/2 connection with httpx
         try:
             # Create a temporary client with HTTP/2
-            from httpx import AsyncClient
             import asyncio
+
+            from httpx import AsyncClient
 
             async with AsyncClient(http2=True) as client:
                 # Set a shorter timeout for detection

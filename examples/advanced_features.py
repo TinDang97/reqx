@@ -55,6 +55,12 @@ async def demo_adaptive_protocol_selection():
         metrics = client.transport.get_metrics_summary()
         print("\nTransport Metrics Summary:")
         print(json.dumps(metrics, indent=2))
+    elif hasattr(client.transport, "get_metrics"):
+        metrics = client.transport.get_metrics()
+        print("\nTransport Metrics:")
+        print(json.dumps(metrics, indent=2))
+    else:
+        print("\nNo metrics available for this transport type.")
 
     await client.close()
 

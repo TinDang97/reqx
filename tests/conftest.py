@@ -7,8 +7,9 @@ from typing import Dict, Optional
 import orjson
 import pytest
 import respx
-from cli import ReqxClient
 from httpx import Response
+
+from src import ReqxClient
 
 # Set timezone for consistent test results
 os.environ["TZ"] = "UTC"
@@ -29,11 +30,11 @@ MOCK_TEXT_RESPONSE = "This is a sample text response."
 
 # Fixtures for the client
 @pytest.fixture(scope="session")
-def http_client():
+async def http_client():
     """Fixture for creating a shared ReqxClient instance."""
     client = ReqxClient()
     yield client
-    client.close()
+    await client.close()
 
 
 @pytest.fixture
