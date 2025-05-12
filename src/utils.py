@@ -4,7 +4,10 @@ Utility functions for Reqx client.
 
 import json
 import logging
+import os
+import platform
 import shlex
+import socket
 import time
 from typing import Any, Dict, Optional, Tuple, Union
 from urllib.parse import urlencode
@@ -12,11 +15,7 @@ from urllib.parse import urlencode
 import httpx
 import jsonpath_ng
 import orjson
-import multiprocessing
-import os
-import platform
 import psutil
-import socket
 
 logger = logging.getLogger("reqx")
 

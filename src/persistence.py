@@ -6,7 +6,6 @@ across application restarts, improving performance over time.
 """
 
 import json
-import os
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional

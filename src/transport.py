@@ -12,14 +12,12 @@ import logging
 import ssl
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
+from typing import Any, Dict, Optional, TypeVar
 from urllib.parse import urlparse
 
 import aiohttp
 import httpx
 from httpx import AsyncClient, Limits, Response, Timeout, TransportError
-
-from .exceptions import RequestError, ResponseError
 
 logger = logging.getLogger("reqx.transport")
 

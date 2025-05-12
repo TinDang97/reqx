@@ -3,17 +3,15 @@ import base64
 import hashlib
 import logging
 import os
-import ssl
 import time
-from pydantic import TypeAdapter
-
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, TypeVar, Union
 from urllib.parse import urljoin, urlparse
 
 from httpx import Response, Timeout, TransportError
+from pydantic import TypeAdapter
 
 from .exceptions import MiddlewareError, RequestError, ResponseError, SecurityError
-from .transport import AiohttpTransport, BaseTransport, HttpxTransport, HybridTransport
+from .transport import HttpxTransport, HybridTransport
 from .utils import log_request, log_response
 
 logger = logging.getLogger("reqx")

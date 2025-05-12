@@ -5,7 +5,7 @@ This module provides a builder pattern for creating and configuring
 ReqxClient instances with a fluent API.
 """
 
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Dict, List, Optional
 
 from .client import ReqxClient
 from .utils import get_optimal_connection_pool_settings
