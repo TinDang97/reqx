@@ -5,12 +5,12 @@ Data models for the enhanced-httpx library.
 import json
 from datetime import datetime
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, Generic, List, Optional, TypeVar, Union
+from typing import Any, Awaitable, Callable, Dict, Generic, List, Optional, Type, TypeVar, Union
 
 import httpx
 from pydantic import BaseModel, Field, HttpUrl, validator
 
-T = TypeVar("T")
+T = TypeVar("T", bound=BaseModel)
 
 
 class HttpMethod(str, Enum):
@@ -135,6 +135,175 @@ class ResponseModel(BaseModel):
         return 500 <= self.status_code < 600
 
 
+class ReqxResponse:
+    """
+    Response container class for all responses from the transport layer.
+
+    This class provides:
+    1. Request information tracking
+    2. Easy conversion to Pydantic models
+    3. Improved error handling
+    4. Performance metrics
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        headers: Dict[str, str],
+        content: bytes,
+        request: Optional[httpx.Request] = None,
+        extensions: Optional[Dict[str, Any]] = None,
+        **kwargs,
+    ):
+        self.status_code = status_code
+        self.headers = headers
+        self.content = content
+        self._text = None
+        self._json = None
+        self.request = request
+        self.extensions = extensions or {}
+
+        # Request metadata
+        self.request_start_time = kwargs.get("request_start_time")
+        self.request_end_time = kwargs.get("request_end_time")
+        self.request_attempt = kwargs.get("request_attempt", 1)
+        self.request_retries = kwargs.get("request_retries", 0)
+        self.cache_hit = kwargs.get("cache_hit", False)
+        self.transport_info = kwargs.get("transport_info", {})
+
+        # Extract URL from request or use provided URL
+        self.url = kwargs.get("url")
+        if self.url is None and self.request is not None:
+            self.url = self.request.url
+
+    @classmethod
+    def from_httpx_response(cls, response: httpx.Response, **kwargs):
+        """Create a ReqxResponse from an httpx Response."""
+        return cls(
+            status_code=response.status_code,
+            headers=response.headers,
+            content=response.content,
+            request=response.request,
+            extensions=response.extensions,
+            url=response.url,
+            **kwargs,
+        )
+
+    def text(self) -> str:
+        """Return the response content as a string."""
+        if self._text is None:
+            self._text = self.content.decode("utf-8", errors="replace")
+        return self._text
+
+    def json(self) -> Any:
+        """Parse the response content as JSON."""
+        if self._json is None:
+            self._json = json.loads(self.text())
+        return self._json
+
+    def to_model(self, model_cls: Type[T]) -> T:
+        """Convert response data to a Pydantic model."""
+        try:
+            json_data = self.json()
+            return model_cls.model_validate(json_data)
+        except Exception as e:
+            from .exceptions import ResponseError
+
+            raise ResponseError(
+                f"Failed to parse response into model {model_cls.__name__}: {str(e)}",
+                status_code=self.status_code,
+                response=self,
+            ) from e
+
+    def to_response_model(self) -> ResponseModel:
+        """Convert to a ResponseModel instance with complete metadata."""
+        try:
+            body = self.json()
+        except Exception:
+            body = self.text()
+
+        elapsed = None
+        if self.request_start_time and self.request_end_time:
+            elapsed = self.request_end_time - self.request_start_time
+
+        return ResponseModel(
+            status_code=self.status_code,
+            headers={k: v for k, v in self.headers.items()},
+            body=body,
+            elapsed=elapsed,
+            url=str(self.url),
+            timestamp=datetime.now(),
+        )
+
+    @property
+    def request_time(self) -> Optional[float]:
+        """Return the time taken for the request in seconds."""
+        if self.request_start_time and self.request_end_time:
+            return self.request_end_time - self.request_start_time
+        return None
+
+    @property
+    def is_success(self) -> bool:
+        """Check if the response indicates success."""
+        return 200 <= self.status_code < 300
+
+    @property
+    def is_error(self) -> bool:
+        """Check if the response indicates an error."""
+        return self.status_code >= 400
+
+    @property
+    def is_client_error(self) -> bool:
+        """Check if the response indicates a client error."""
+        return 400 <= self.status_code < 500
+
+    @property
+    def is_server_error(self) -> bool:
+        """Check if the response indicates a server error."""
+        return self.status_code >= 500
+
+    def raise_for_status(self) -> None:
+        """Raise an exception if the response contains an HTTP error status code."""
+        from .exceptions import ResponseError
+
+        if self.is_error:
+            error_msg = f"HTTP error occurred: {self.status_code}"
+            if self.status_code >= 500:
+                error_msg = f"Server error: {self.status_code}"
+            elif self.status_code >= 400:
+                error_msg = f"Client error: {self.status_code}"
+
+            raise ResponseError(
+                message=error_msg,
+                status_code=self.status_code,
+                response=self,
+            )
+
+    def dict(self) -> Dict[str, Any]:
+        """Convert response to a dictionary representation."""
+        try:
+            body = self.json()
+        except Exception:
+            body = self.text()
+
+        return {
+            "status_code": self.status_code,
+            "url": str(self.url) if self.url else None,
+            "headers": {k: v for k, v in self.headers.items()},
+            "body": body,
+            "elapsed": self.request_time,
+            "ok": self.is_success,
+            "request_info": {
+                "method": self.request.method if self.request else None,
+                "url": str(self.request.url) if self.request else None,
+                "attempt": self.request_attempt,
+                "retries": self.request_retries,
+                "cache_hit": self.cache_hit,
+            },
+            "transport_info": self.transport_info,
+        }
+
+
 class GenericResponse(Generic[T], BaseModel):
     """
     Generic response model that can be used to parse API responses into specific types.
@@ -228,7 +397,7 @@ class ResponseHook(BaseModel):
     """Hook for response interception and modification."""
 
     callback: Optional[Callable] = None
-    async_callback: Optional[Callable[[httpx.Response], Awaitable[httpx.Response]]] = None
+    async_callback: Optional[Callable[[ReqxResponse], Awaitable[ReqxResponse]]] = None
 
     class Config:
         # Enable slots for memory optimization

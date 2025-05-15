@@ -362,9 +362,9 @@ def get_optimal_connection_pool_settings() -> Dict[str, int]:
         keepalive_expiry = 60  # 60 seconds default
 
     return {
-        "max_connections": max_connections,
-        "max_keepalive_connections": max_keepalive,
-        "keepalive_expiry": keepalive_expiry,
+        "max_connections": int(max_connections),
+        "max_keepalive_connections": int(max_keepalive),
+        "keepalive_expiry": int(keepalive_expiry),
     }
 
 

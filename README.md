@@ -186,6 +186,9 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Experiment
 
+> **Warning**
+> The following experiment results are for demonstration purposes only. Performance may vary significantly depending on hardware, environment, and workload. Please benchmark in your own environment for accurate comparisons.
+
 Running batch benchmarks against http://localhost:80
 Batch size: 100
 HTTP method: GET
@@ -198,4 +201,3 @@ Clients: reqx, httpx, aiohttp
 | aiohttp_batch |   10000  |    6.38      | 1567.53 | 0.64             | 3807.67     |
 | reqx_batch    |   10000  |    7.915     | 1271.68 | 0.79             | 4872.33     |
 | httpx_batch   |   10000  |   26.264     | 382.02  | 2.63             | 5777.67     |
-

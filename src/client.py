@@ -8,9 +8,10 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, TypeVar
 from urllib.parse import urljoin, urlparse
 
 from httpx import Response, Timeout, TransportError
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 
 from .exceptions import MiddlewareError, RequestError, ResponseError, SecurityError
+from .models import ReqxResponse
 from .transport import HttpxTransport, HybridTransport
 from .utils import log_request, log_response
 
@@ -18,7 +19,7 @@ logger = logging.getLogger("reqx")
 # Set up logging
 logging.basicConfig(level=logging.WARNING)
 
-T = TypeVar("T")
+T = TypeVar("T", bound=BaseModel)
 
 try:
     import uvloop
@@ -30,7 +31,7 @@ except ImportError:
 
 # Define middleware types
 RequestMiddleware = Callable[[str, str, Dict[str, Any]], Awaitable[Dict[str, Any]]]
-ResponseMiddleware = Callable[[Response], Awaitable[Response]]
+ResponseMiddleware = Callable[[ReqxResponse], Awaitable[ReqxResponse]]
 
 # Define batch request types
 BatchRequestItem = TypeVar("BatchRequestItem", bound=dict)
@@ -556,6 +557,8 @@ class ReqxClient:
     def _prepare_url(self, url: str) -> str:
         """Prepare the URL by joining it with the base_url if it's not absolute."""
         if not url.startswith(("http://", "https://")):
+            if self.base_url is None:
+                raise ValueError("base_url must be set to join with a relative URL.")
             return urljoin(self.base_url, url)
         return url
 
@@ -660,7 +663,7 @@ class ReqxClient:
                 raise MiddlewareError(f"Request middleware error: {str(e)}") from e
         return current_kwargs
 
-    async def _apply_response_middlewares(self, response: Response) -> Response:
+    async def _apply_response_middlewares(self, response: ReqxResponse) -> ReqxResponse:
         """Apply all response middlewares in order."""
         current_response = response
         for middleware in self.response_middlewares:
@@ -688,7 +691,7 @@ class ReqxClient:
         cache: bool | None = None,
         cache_ttl: int | None = None,
         force_http2: bool = False,
-    ) -> Union[Response, T, None]:
+    ) -> Union[ReqxResponse, None]:
         """
         Send an HTTP request with retry logic and proper error handling.
 
@@ -703,7 +706,6 @@ class ReqxClient:
             files: Files to upload
             timeout: Request timeout in seconds
             follow_redirects: Whether to follow redirects
-            verify_ssl: Whether to verify SSL certificates
             response_model: Optional Pydantic model to parse the response into
             stream: Whether to enable streaming response (for large downloads)
             cache: Whether to use cache for this request (overrides client setting)
@@ -711,7 +713,7 @@ class ReqxClient:
             force_http2: Force the use of HTTP/2 for this request
 
         Returns:
-            Response object or parsed model instance if response_model is provided
+            EnhancedResponse object or parsed model instance if response_model is provided
         """
         start_time = time.time()
         self.metrics["requests_sent"] += 1
@@ -774,29 +776,34 @@ class ReqxClient:
                 if self.debug:
                     logger.debug(f"Cache hit for {method} {full_url}")
 
+                # Create an enhanced response with cache hit metadata
+                enhanced_cached_response = ReqxResponse.from_httpx_response(
+                    cached_response, cache_hit=True, request_attempt=1, request_retries=0
+                )
+
                 # Apply response middlewares to cached response
-                cached_response = await self._apply_response_middlewares(cached_response)
+                enhanced_cached_response = await self._apply_response_middlewares(
+                    enhanced_cached_response
+                )
 
                 # Parse to response model if one was provided
                 if response_model:
                     try:
-                        json_data = cached_response.json()
-                        # Use TypeAdapter for Pydantic v2 compatibility
-                        adapter = TypeAdapter(response_model)
-                        return adapter.validate_python(json_data)
+                        return enhanced_cached_response.to_model(response_model)
                     except Exception as e:
                         raise ResponseError(
                             "Failed to parse cached response into model "
                             f"{response_model.__name__}: {str(e)}"
                         ) from e
 
-                return cached_response
+                return enhanced_cached_response
 
         # Apply request middlewares
         kwargs = await self._apply_request_middlewares(method, full_url, kwargs)
 
         # Initialize retry counter
         retry_count = 0
+        transport_info = {}
 
         # Retry loop
         while retry_count <= self.max_retries:
@@ -805,39 +812,53 @@ class ReqxClient:
                 # Make the request (with or without streaming)
                 # Use our transport layer which handles HTTP protocol selection
                 response = await self.transport.request(method=method, url=full_url, **kwargs)
+                request_end_time = time.time()
+                request_duration = request_end_time - request_start_time
 
-                request_duration = time.time() - request_start_time
+                # Get transport information if available
+                if hasattr(self.transport, "get_last_protocol"):
+                    transport_info["protocol"] = self.transport.get_last_protocol()
+                if hasattr(self.transport, "get_last_transport"):
+                    transport_info["transport"] = self.transport.get_last_transport()
+
+                # Create an enhanced response with request metadata
+                enhanced_response = ReqxResponse.from_httpx_response(
+                    response,
+                    request_start_time=request_start_time,
+                    request_end_time=request_end_time,
+                    request_attempt=retry_count + 1,
+                    request_retries=retry_count,
+                    cache_hit=False,
+                    transport_info=transport_info,
+                )
 
                 # Record successful request for adaptive timeout
                 if self.adaptive_timeout and self.timeout_manager:
                     self.timeout_manager.record_request(host, request_duration, success=True)
 
                 if self.debug:
-                    log_response(response)
+                    log_response(enhanced_response)
 
                 # Apply response middlewares
-                response = await self._apply_response_middlewares(response)
+                enhanced_response = await self._apply_response_middlewares(enhanced_response)
 
                 # Verify the server certificate if certificate pinning is enabled
                 if self.certificate_pinner:
-                    cert = response.extensions.get("cert")
+                    cert = enhanced_response.extensions.get("cert")
                     if cert:
-                        self.certificate_pinner.verify_certificate(response.url.host, cert)
+                        self.certificate_pinner.verify_certificate(enhanced_response.url.host, cert)
 
                 # Check if the response indicates an error
-                response.raise_for_status()
+                enhanced_response.raise_for_status()
 
                 # Store in cache if cacheable and not streaming
                 if cacheable and not stream and cache_key is not None:
-                    self._store_in_cache(cache_key, response, cache_ttl)
+                    self._store_in_cache(cache_key, enhanced_response, cache_ttl)
 
                 # Parse to response model if one was provided
                 if response_model and not stream:
                     try:
-                        json_data = response.json()
-                        # Use TypeAdapter for Pydantic v2 compatibility
-                        adapter = TypeAdapter(response_model)
-                        return adapter.validate_python(json_data)
+                        return enhanced_response.to_model(response_model)
                     except Exception as e:
                         raise ResponseError(
                             "Failed to parse response into model"
@@ -846,7 +867,7 @@ class ReqxClient:
 
                 # Update metrics
                 self.metrics["total_request_time"] += time.time() - start_time
-                return response
+                return enhanced_response
 
             except TransportError as e:
                 # Check if it's a timeout
@@ -885,35 +906,51 @@ class ReqxClient:
                 raise RequestError(f"Request failed: {str(e)}") from e
 
     # Convenience methods for common HTTP methods
-    async def get(self, url: str, **kwargs) -> Union[Response, Any]:
+    async def get(
+        self, url: str, response_model: Type[T] | None = None, **kwargs
+    ) -> Union[Response, T, Any]:
         """Send a GET request."""
-        return await self.request("GET", url, **kwargs)
+        return await self.request("GET", url, response_model=response_model, **kwargs)
 
-    async def post(self, url: str, **kwargs) -> Union[Response, Any]:
+    async def post(
+        self, url: str, response_model: Type[T] | None = None, **kwargs
+    ) -> Union[Response, T, Any]:
         """Send a POST request."""
-        return await self.request("POST", url, **kwargs)
+        return await self.request("POST", url, response_model=response_model, **kwargs)
 
-    async def put(self, url: str, **kwargs) -> Union[Response, Any]:
+    async def put(
+        self, url: str, response_model: Type[T] | None = None, **kwargs
+    ) -> Union[Response, T, Any]:
         """Send a PUT request."""
-        return await self.request("PUT", url, **kwargs)
+        return await self.request("PUT", url, response_model=response_model, **kwargs)
 
-    async def patch(self, url: str, **kwargs) -> Union[Response, Any]:
+    async def patch(
+        self, url: str, response_model: Type[T] | None = None, **kwargs
+    ) -> Union[Response, T, Any]:
         """Send a PATCH request."""
-        return await self.request("PATCH", url, **kwargs)
+        return await self.request("PATCH", url, response_model=response_model, **kwargs)
 
-    async def delete(self, url: str, **kwargs) -> Union[Response, Any]:
+    async def delete(
+        self, url: str, response_model: Type[T] | None = None, **kwargs
+    ) -> Union[Response, T, Any]:
         """Send a DELETE request."""
-        return await self.request("DELETE", url, **kwargs)
+        return await self.request("DELETE", url, response_model=response_model, **kwargs)
 
-    async def head(self, url: str, **kwargs) -> Union[Response, Any]:
+    async def head(
+        self, url: str, response_model: Type[T] | None = None, **kwargs
+    ) -> Union[Response, T, Any]:
         """Send a HEAD request."""
-        return await self.request("HEAD", url, **kwargs)
+        return await self.request("HEAD", url, response_model=response_model, **kwargs)
 
-    async def options(self, url: str, **kwargs) -> Union[Response, Any]:
+    async def options(
+        self, url: str, response_model: Type[T] | None = None, **kwargs
+    ) -> Union[Response, T, Any]:
         """Send an OPTIONS request."""
-        return await self.request("OPTIONS", url, **kwargs)
+        return await self.request("OPTIONS", url, response_model=response_model, **kwargs)
 
-    async def stream(self, method: str, url: str, **kwargs) -> Response | None:
+    async def stream(
+        self, method: str, url: str, response_model: Type[T] | None = None, **kwargs
+    ) -> Response | T | None:
         """
         Send a request and return a streaming response for handling large files.
 
@@ -923,7 +960,7 @@ class ReqxClient:
                     # process chunk
         """
         kwargs["stream"] = True
-        return await self.request(method, url, **kwargs)
+        return await self.request(method, url, response_model=response_model, **kwargs)
 
     async def download_file(
         self, url: str, file_path: str, chunk_size: int = 8192, **kwargs

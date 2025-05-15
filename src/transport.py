@@ -17,7 +17,9 @@ from urllib.parse import urlparse
 
 import aiohttp
 import httpx
-from httpx import AsyncClient, Limits, Response, Timeout, TransportError
+from httpx import AsyncClient, Limits, Timeout, TransportError
+
+from src.models import ReqxResponse
 
 logger = logging.getLogger("reqx.transport")
 
@@ -33,7 +35,7 @@ class BaseTransport(ABC):
         method: str,
         url: str,
         **kwargs,
-    ) -> Response:
+    ) -> ReqxResponse:
         """Send an HTTP request and return a response."""
         pass
 
@@ -116,10 +118,27 @@ class HttpxTransport(BaseTransport):
         self._http2_enabled = http2
         self.client = AsyncClient(**client_kwargs)
 
-    async def request(self, method: str, url: str, **kwargs) -> Response:
+    async def request(self, method: str, url: str, **kwargs) -> ReqxResponse:
         """Send an HTTP request using httpx and return a response."""
+        request_start_time = time.time()
         response = await self.client.request(method=method, url=url, **kwargs)
-        return response
+        request_end_time = time.time()
+
+        # Create ReqxResponse from httpx response
+        reqx_response = ReqxResponse.from_httpx_response(
+            response,
+            request_start_time=request_start_time,
+            request_end_time=request_end_time,
+            transport_info={
+                "transport": "httpx",
+                "http2": self._http2_enabled,
+                "http3": self._http3_enabled,
+                "base_url": self.client.base_url,
+                "follow_redirects": self.client.follow_redirects,
+                "timeout": self.client.timeout,
+            },
+        )
+        return reqx_response
 
     async def close(self):
         """Close the httpx client session."""
@@ -218,26 +237,37 @@ class AiohttpTransport(BaseTransport):
         self.follow_redirects = follow_redirects
         self.base_url = base_url
 
-    async def request(self, method: str, url: str, **kwargs) -> Response:
+    async def request(self, method: str, url: str, **kwargs) -> ReqxResponse:
         """Send an HTTP request using aiohttp and return a response."""
         # Convert kwargs to aiohttp format
         aiohttp_kwargs = self._convert_kwargs_to_aiohttp(kwargs)
 
         try:
+            request_start_time = time.time()
             # Make the request with aiohttp
             async with self.session.request(method, url, **aiohttp_kwargs) as aiohttp_response:
-                # Convert aiohttp response to httpx response
+                request_end_time = time.time()
+                # Read the content
                 content = await aiohttp_response.read()
 
-                # Create httpx response for API compatibility
-                httpx_response = Response(
+                # Create ReqxResponse directly
+                reqx_response = ReqxResponse(
                     status_code=aiohttp_response.status,
                     headers=dict(aiohttp_response.headers),
                     content=content,
                     request=httpx.Request(method, url),
+                    request_start_time=request_start_time,
+                    request_end_time=request_end_time,
+                    url=url,
+                    transport_info={
+                        "transport": "aiohttp",
+                        "base_url": self.base_url,
+                        "follow_redirects": self.follow_redirects,
+                        "timeout": aiohttp_kwargs.get("timeout"),
+                    },
                 )
 
-                return httpx_response
+                return reqx_response
         except aiohttp.ClientError as e:
             # Convert aiohttp exceptions to httpx exceptions
             raise TransportError(f"Transport error: {str(e)}") from e
@@ -555,7 +585,7 @@ class HybridTransport(BaseTransport):
         # Track transport preferences when learning is enabled
         self._transport_preferences = {} if transport_learning else None
 
-    async def request(self, method: str, url: str, **kwargs) -> Response:
+    async def request(self, method: str, url: str, **kwargs) -> ReqxResponse:
         """
         Send an HTTP request using the appropriate transport and return a response.
         """
