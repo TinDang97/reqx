@@ -1,9 +1,9 @@
-# reqx: High-Performance HTTP Client Library
+# reqx: Adaptive HTTP Client balance of features and performance
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-reqx is a modern, high-performance HTTP client library for Python, extending [httpx](https://github.com/encode/httpx) with advanced features and optimizations for demanding use cases.
+`reqx` is an adaptive HTTP client library for Python that balances rich features with high performance, it adds advanced capabilities and smart optimizations for demanding and production-grade use cases.
 
 ## Key Features
 
